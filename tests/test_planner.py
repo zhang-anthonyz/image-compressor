@@ -63,6 +63,9 @@ def test_png_palette_depth_is_monotonic_and_bounded():
     values = [png_colors_for_quality(q) for q in range(1, 101)]
     assert values == sorted(values)
     assert values[0] >= 16 and values[-1] == 256
+    # The high preset is the one most users leave selected; it must use the
+    # whole palette instead of stopping at ~199 colours.
+    assert png_colors_for_quality(82) == 256
 
 
 def test_png_colors_clamp_out_of_range_input():
@@ -70,10 +73,11 @@ def test_png_colors_clamp_out_of_range_input():
     assert png_colors_for_quality(9999) == 256
 
 
-def test_jpeg_subsampling_switches_to_444_at_high_quality():
+def test_jpeg_subsampling_switches_to_444_from_the_high_preset():
     assert jpeg_subsampling(95) == 0
     assert jpeg_subsampling(90) == 0
-    assert jpeg_subsampling(85) == 2
+    assert jpeg_subsampling(82) == 0
+    assert jpeg_subsampling(65) == 2
 
 
 @pytest.mark.parametrize(

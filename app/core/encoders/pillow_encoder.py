@@ -94,11 +94,39 @@ def _quantize_for_png(img: Image.Image, colors: int, notes: list[str]) -> Image.
     """Palette-reduce for lossy PNG. ``None`` means "not possible, stay lossless"."""
     try:
         if img.mode in ("RGB", "L", "1", "P"):
-            return img.quantize(colors=colors, method=Image.Quantize.MEDIANCUT)
+            quantized = img.quantize(
+                colors=colors,
+                method=Image.Quantize.MEDIANCUT,
+                dither=Image.Dither.FLOYDSTEINBERG,
+            )
+            notes.append(f"颜色量化至 {colors} 色")
+            return quantized
         if img.mode == "RGBA":
-            # Median cut cannot handle alpha; FASTOCTREE can, at slightly worse
-            # colour quality (measured 28.3 dB vs 31.9 dB on the photo fixture).
-            return img.quantize(colors=colors, method=Image.Quantize.FASTOCTREE)
+            # FASTOCTREE spends the palette on the alpha channel: a smooth RGBA
+            # ramp requested at 256 colours came back with only 60, which is the
+            # severe banding/cast users saw on transparent PNGs. Quantize the
+            # colour channels with the full palette, then put the original alpha
+            # back at 8-bit precision. The file is RGBA rather than palette-PNG,
+            # but it is still colour-quantized and the transparency is exact.
+            alpha = img.getchannel("A")
+            low, high = alpha.getextrema()
+            if low == high == 255:
+                quantized = img.convert("RGB").quantize(
+                    colors=colors,
+                    method=Image.Quantize.MEDIANCUT,
+                    dither=Image.Dither.FLOYDSTEINBERG,
+                )
+                notes.append(f"颜色量化至 {colors} 色")
+                return quantized
+            quantized = img.convert("RGB").quantize(
+                colors=colors,
+                method=Image.Quantize.MEDIANCUT,
+                dither=Image.Dither.FLOYDSTEINBERG,
+            )
+            rgba = quantized.convert("RGBA")
+            rgba.putalpha(alpha)
+            notes.append(f"颜色量化至 {colors} 色（透明通道保留）")
+            return rgba
     except (ValueError, OSError):
         notes.append("该图无法调色板量化，已改用无损压缩")
         return None
