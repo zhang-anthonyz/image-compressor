@@ -114,7 +114,10 @@ def quality_hint(target: FormatSpec | None, mode: str, quality: int) -> str:
     if not target.can_lossy:
         return target.lossy_note or f"{target.label} 没有质量参数"
     if target.key == "png":
-        return f"调色板量化至 {png_colors_for_quality(quality)} 色 · 画质 {quality_label(quality)}"
+        return (
+            f"调色板量化至 {png_colors_for_quality(quality)} 色 · 画质 {quality_label(quality)}"
+            " · 照片建议改用 WebP"
+        )
     if target.key == "tiff":
         return "TIFF 使用 deflate 无损压缩"
     return f"质量 {quality}（{quality_label(quality)}）"
@@ -191,7 +194,7 @@ def plan_from_widget_values(values: dict) -> CompressionPlan:
     return plan
 
 
-def summary_line(stats: dict, *, running: bool = False) -> str:
+def summary_line(stats: dict, *, running: bool = False, cancelling: bool = False) -> str:
     """Status-bar sentence for the current queue stats."""
     count = int(stats.get("count", 0))
     if count == 0:
@@ -211,6 +214,35 @@ def summary_line(stats: dict, *, running: bool = False) -> str:
     skipped = int(stats.get("skipped", 0))
     if skipped:
         parts.append(f"{skipped} 个跳过")
-    if running:
+    if cancelling:
+        parts.append("正在取消")
+    elif running:
         parts.append("正在压缩")
     return " · ".join(parts)
+
+
+# ------------------------------------------------------------------ layout ---
+#: Minimum name-column width before the queue table starts scrolling instead of
+#: squeezing file names into unreadable slivers.
+QUEUE_NAME_MIN_WIDTH = 180
+
+#: The settings rail scales with the window but stays within a readable band.
+#: 336 is the measured minimum: the settings card itself needs 318 px, plus the
+#: scrollbar gutter, before its right edge would be clipped (see ui_preview).
+RAIL_MIN_WIDTH = 336
+RAIL_MAX_WIDTH = 456
+
+
+def rail_width(window_width: int) -> int:
+    """Sidebar width for a given window width (proportional, clamped)."""
+    return max(RAIL_MIN_WIDTH, min(RAIL_MAX_WIDTH, round(window_width * 0.28)))
+
+
+def queue_name_width(viewport_width: int, fixed_widths: int) -> int:
+    """Width for the stretch column; overflowing the viewport is intentional.
+
+    When the result exceeds the viewport the table must show a horizontal
+    scrollbar rather than clipping information, which is why the minimum width
+    is a hard floor instead of shrinking to zero.
+    """
+    return max(QUEUE_NAME_MIN_WIDTH, int(viewport_width) - int(fixed_widths) - 2)

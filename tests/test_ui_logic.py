@@ -58,6 +58,8 @@ def test_quality_hint_explains_png_palette_size():
 
     hint = ui_logic.quality_hint(formats.BY_KEY["png"], ui_logic.MODE_LOSSY, 70)
     assert str(png_colors_for_quality(70)) in hint
+    high = ui_logic.quality_hint(formats.BY_KEY["png"], ui_logic.MODE_LOSSY, 82)
+    assert "256" in high and "WebP" in high
 
 
 def test_quality_hint_quotes_the_lossless_note():
@@ -139,3 +141,24 @@ def test_summary_line_reports_savings_and_problems():
     assert "5 个文件" in text and "已选 4" in text
     assert "总节省" in text and "1 个失败" in text and "2 个跳过" in text
     assert "正在压缩" in text
+
+
+def test_summary_line_says_cancelling_instead_of_running():
+    text = ui_logic.summary_line({"count": 3, "enabled": 3}, running=True, cancelling=True)
+    assert "正在取消" in text
+    assert "正在压缩" not in text
+
+
+def test_rail_width_scales_but_stays_readable():
+    assert ui_logic.rail_width(980) == ui_logic.RAIL_MIN_WIDTH
+    assert ui_logic.rail_width(1280) > ui_logic.rail_width(1080)
+    assert ui_logic.rail_width(1920) == ui_logic.RAIL_MAX_WIDTH
+    assert ui_logic.rail_width(2560) == ui_logic.RAIL_MAX_WIDTH
+
+
+def test_queue_name_width_keeps_a_floor_so_overflow_scrolls():
+    # Plenty of room: the name column absorbs the slack.
+    assert ui_logic.queue_name_width(1200, 516) == 682
+    # Narrow: the floor stays and the table must scroll rather than clip.
+    assert ui_logic.queue_name_width(580, 516) == ui_logic.QUEUE_NAME_MIN_WIDTH
+    assert ui_logic.queue_name_width(580, 516) + 516 > 580
