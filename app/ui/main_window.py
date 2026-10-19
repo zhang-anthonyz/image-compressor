@@ -4,12 +4,22 @@ Layout intent (see docs/技术方案.md §7.3): a single instrument panel rather
 a pile of tabs, because compressing images is a watch-the-numbers activity —
 the queue, the before/after seam and the running total all need to be visible
 at once.
+
+Responsiveness is deliberately structural, not a last-minute resize hack:
+
+* two splitters own the horizontal (workspace / settings rail) and vertical
+  (queue / preview) proportions, so the user can always give the stage room;
+* the settings rail is proportional but clamped to a readable band;
+* the queue name column absorbs the slack and a horizontal scrollbar appears
+  the moment the fixed columns no longer fit instead of clipping values;
+* the preview fits width by default and has real scrollbars, because "fit the
+  whole image into 200 px of height" made comparison pointless.
 """
 from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, QUrl, Signal
+from PySide6.QtCore import QEvent, QSize, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -21,7 +31,6 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
-    QSizePolicy,
     QStackedWidget,
     QTableView,
     QVBoxLayout,
@@ -46,10 +55,30 @@ from .queue_model import (
     QueueDelegate,
     QueueModel,
 )
-from .widgets import DropZone, IconButton, MicroLabel, MonoLabel, SegmentedControl, Toast
+from .widgets import (
+    DropZone,
+    ElidedLabel,
+    GripSplitter,
+    IconButton,
+    MicroLabel,
+    MonoLabel,
+    SegmentedControl,
+    Toast,
+)
 from .workers import BatchRunner, BatchSignals
 
 TOAST_DIR_ERROR = "无法写入该输出目录，请检查权限"
+
+#: Fixed columns plus the minimum hand-managed name width. The name column gets
+#: everything left over; if that is not enough, the table scrolls horizontally.
+QUEUE_FIXED_COLUMNS = {
+    COL_ENABLED: 34,
+    COL_DIMENSIONS: 150,
+    COL_ORIGINAL: 84,
+    COL_RESULT: 90,
+    COL_SAVINGS: 158,
+}
+QUEUE_FIXED_TOTAL = sum(QUEUE_FIXED_COLUMNS.values())
 
 
 class MainWindow(QMainWindow):
@@ -63,9 +92,13 @@ class MainWindow(QMainWindow):
         self._plan: CompressionPlan = store.plan
         self._mode = "light"
         self._output_dir: Path | None = None
+        self._rail_user_sized = False
+        self._workspace_sized = False
+        self._setting_split = False
+        self._fitting_columns = False
 
         self.setWindowTitle(f"{APP_NAME} · {APP_TAGLINE}")
-        self.setMinimumSize(1080, 700)
+        self.setMinimumSize(980, 640)
         self.resize(store.window_width, store.window_height)
         self.setAcceptDrops(True)
 
@@ -82,7 +115,7 @@ class MainWindow(QMainWindow):
         self._sync_panels()
         self._refresh_theme_icons()
         self.log.info(f"{APP_NAME} {APP_VERSION} 就绪 · {registry.engine_badge()}")
-        self.log_panel.append_record(self.log.records()[-1])
+        QTimer.singleShot(0, self._apply_responsive_layout)
 
     # ------------------------------------------------------------------ build
     def _build_ui(self) -> None:
@@ -98,21 +131,19 @@ class MainWindow(QMainWindow):
         content = QWidget()
         content.setObjectName("contentArea")
         body = QHBoxLayout(content)
-        body.setContentsMargins(14, 12, 14, 10)
-        body.setSpacing(12)
-        body.addWidget(self._build_left_column(), 1)
+        body.setContentsMargins(12, 12, 12, 10)
+        body.setSpacing(0)
 
-        right = QWidget()
-        right.setObjectName("pageBody")
-        right.setFixedWidth(342)
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.setSpacing(12)
-        self.settings_panel = SettingsPanel(self._plan)
-        right_layout.addWidget(make_scroll(self.settings_panel), 1)
-        self.task_panel = TaskPanel()
-        right_layout.addWidget(self.task_panel)
-        body.addWidget(right)
+        self.main_split = GripSplitter(Qt.Orientation.Horizontal)
+        self.main_split.setObjectName("mainSplit")
+        self.main_split.setChildrenCollapsible(False)
+        self.main_split.setHandleWidth(10)
+        self.main_split.addWidget(self._build_left_column())
+        self.main_split.addWidget(self._build_right_column())
+        self.main_split.setStretchFactor(0, 1)
+        self.main_split.setStretchFactor(1, 0)
+        self.main_split.splitterMoved.connect(self._on_main_split_moved)
+        body.addWidget(self.main_split)
 
         outer.addWidget(content, 1)
         outer.addWidget(self._build_status_bar())
@@ -157,15 +188,16 @@ class MainWindow(QMainWindow):
         return bar
 
     def _build_left_column(self) -> QWidget:
-        column = QWidget()
-        column.setObjectName("pageBody")
-        layout = QVBoxLayout(column)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(12)
+        self.workspace_split = GripSplitter(Qt.Orientation.Vertical)
+        self.workspace_split.setObjectName("workspaceSplit")
+        self.workspace_split.setChildrenCollapsible(False)
+        self.workspace_split.setHandleWidth(10)
+        self.workspace_split.setMinimumWidth(520)
 
         # ---- queue card
         queue_card = QFrame()
         queue_card.setObjectName("card")
+        queue_card.setMinimumHeight(240)
         queue_layout = QVBoxLayout(queue_card)
         queue_layout.setContentsMargins(14, 12, 14, 14)
         queue_layout.setSpacing(10)
@@ -200,9 +232,10 @@ class MainWindow(QMainWindow):
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             toolbar.addWidget(button)
         toolbar.addStretch(1)
-        self.select_all_button = QPushButton("全部参与")
+        self.select_all_button = QPushButton("全部跳过")
         self.select_all_button.setObjectName("ghostButton")
         self.select_all_button.setMinimumHeight(29)
+        self.select_all_button.setCursor(Qt.CursorShape.PointingHandCursor)
         toolbar.addWidget(self.select_all_button)
         queue_layout.addLayout(toolbar)
 
@@ -220,41 +253,77 @@ class MainWindow(QMainWindow):
         self.table.verticalHeader().setDefaultSectionSize(38)
         self.table.setMouseTracking(True)
         self.table.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.table.setHorizontalScrollMode(QAbstractItemView.ScrollMode.ScrollPerPixel)
         header_view = self.table.horizontalHeader()
         header_view.setHighlightSections(False)
         header_view.setFixedHeight(28)
-        for section, width in (
-            (COL_ENABLED, 34),
-            (COL_DIMENSIONS, 158),
-            (COL_ORIGINAL, 92),
-            (COL_RESULT, 96),
-            (COL_SAVINGS, 176),
-        ):
+        header_view.setMinimumSectionSize(24)
+        header_view.setStretchLastSection(False)
+        for section in range(self.model.columnCount()):
             header_view.setSectionResizeMode(section, QHeaderView.ResizeMode.Fixed)
-            self.table.setColumnWidth(section, width)
-        header_view.setSectionResizeMode(COL_NAME, QHeaderView.ResizeMode.Stretch)
+        self._apply_queue_column_widths()
+        self.table.viewport().installEventFilter(self)
 
         self.empty_state = self._build_empty_state()
         self.queue_stack = QStackedWidget()
         self.queue_stack.addWidget(self.empty_state)
         self.queue_stack.addWidget(self.table)
-        self.queue_stack.setMinimumHeight(190)
+        self.queue_stack.setMinimumHeight(150)
         queue_layout.addWidget(self.queue_stack, 1)
-        layout.addWidget(queue_card, 1)
+        self.workspace_split.addWidget(queue_card)
 
         # ---- preview / log
         bottom_card = QFrame()
         bottom_card.setObjectName("card")
+        bottom_card.setMinimumHeight(240)
         bottom_layout = QVBoxLayout(bottom_card)
-        bottom_layout.setContentsMargins(14, 11, 14, 13)
-        bottom_layout.setSpacing(9)
+        bottom_layout.setContentsMargins(12, 10, 12, 12)
+        bottom_layout.setSpacing(8)
 
         switch_row = QHBoxLayout()
         switch_row.setSpacing(8)
         self.bottom_switch = SegmentedControl([("preview", "预览对比"), ("log", "任务日志")])
         self.bottom_switch.set_value("preview" if not self._store.show_log else "log")
         switch_row.addWidget(self.bottom_switch)
-        switch_row.addStretch(1)
+
+        self.preview_hint = ElidedLabel("拖动中缝对比 · Ctrl+滚轮缩放")
+        self.preview_hint.setObjectName("previewCaption")
+        self.preview_hint.setMinimumWidth(0)
+        switch_row.addWidget(self.preview_hint, 1)
+
+        self.zoom_label = MonoLabel("100%")
+        self.zoom_label.setObjectName("cardHint")
+        self.zoom_out_button = IconButton("remove", "缩小 (Ctrl+-)", size=26)
+        self.zoom_in_button = IconButton("add-file", "放大 (Ctrl++)", size=26)
+        self.actual_button = QPushButton("1:1")
+        self.actual_button.setObjectName("ghostButton")
+        self.actual_button.setToolTip("按原始像素显示")
+        self.actual_button.setMinimumHeight(26)
+        self.fit_button = QPushButton("适应")
+        self.fit_button.setObjectName("ghostButton")
+        self.fit_button.setToolTip("适应宽度（Ctrl+0 复位）")
+        self.fit_button.setMinimumHeight(26)
+        self.preview_controls = [
+            self.zoom_label,
+            self.zoom_out_button,
+            self.zoom_in_button,
+            self.actual_button,
+            self.fit_button,
+        ]
+        for widget in self.preview_controls:
+            switch_row.addWidget(widget)
+
+        self.copy_log_button = QPushButton("复制全部")
+        self.copy_log_button.setObjectName("ghostButton")
+        self.copy_log_button.setMinimumHeight(26)
+        self.clear_log_button = QPushButton("清空")
+        self.clear_log_button.setObjectName("ghostButton")
+        self.clear_log_button.setMinimumHeight(26)
+        self.log_controls = [self.copy_log_button, self.clear_log_button]
+        for widget in self.log_controls:
+            switch_row.addWidget(widget)
+
         bottom_layout.addLayout(switch_row)
 
         self.preview_panel = PreviewPanel()
@@ -262,12 +331,28 @@ class MainWindow(QMainWindow):
         self.bottom_stack = QStackedWidget()
         self.bottom_stack.addWidget(self.preview_panel)
         self.bottom_stack.addWidget(self.log_panel)
-        self.bottom_stack.setMinimumHeight(216)
+        self.bottom_stack.setMinimumHeight(150)
         bottom_layout.addWidget(self.bottom_stack, 1)
-        self._sync_bottom_stack()
-        layout.addWidget(bottom_card)
+        self.workspace_split.addWidget(bottom_card)
+        self.workspace_split.setStretchFactor(0, 3)
+        self.workspace_split.setStretchFactor(1, 2)
 
-        return column
+        self._sync_bottom_stack()
+        return self.workspace_split
+
+    def _build_right_column(self) -> QWidget:
+        right = QWidget()
+        right.setObjectName("pageBody")
+        right.setMinimumWidth(ui_logic.RAIL_MIN_WIDTH)
+        right.setMaximumWidth(520)
+        right_layout = QVBoxLayout(right)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(12)
+        self.settings_panel = SettingsPanel(self._plan)
+        right_layout.addWidget(make_scroll(self.settings_panel), 1)
+        self.task_panel = TaskPanel()
+        right_layout.addWidget(self.task_panel)
+        return right
 
     def _build_empty_state(self) -> QWidget:
         page = QWidget()
@@ -309,10 +394,10 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(14, 0, 14, 0)
         layout.setSpacing(14)
 
-        self.status_text = QLabel("队列为空 · 拖入图片或点击「添加文件」开始")
+        self.status_text = ElidedLabel("队列为空 · 拖入图片或点击「添加文件」开始")
         self.status_text.setObjectName("statusBarText")
-        layout.addWidget(self.status_text)
-        layout.addStretch(1)
+        self.status_text.setMinimumWidth(0)
+        layout.addWidget(self.status_text, 1)
 
         self.status_saved = QLabel("—")
         self.status_saved.setObjectName("statusBarAccent")
@@ -340,11 +425,18 @@ class MainWindow(QMainWindow):
         self.table.clicked.connect(self._on_table_clicked)
 
         self.bottom_switch.changed.connect(lambda _: self._sync_bottom_stack())
+        self.preview_panel.view.zoomChanged.connect(self._on_zoom)
+        self.fit_button.clicked.connect(self.preview_panel.view.reset_view)
+        self.actual_button.clicked.connect(self.preview_panel.view.actual_size)
+        self.zoom_in_button.clicked.connect(self.preview_panel.view.zoom_in)
+        self.zoom_out_button.clicked.connect(self.preview_panel.view.zoom_out)
+        self.copy_log_button.clicked.connect(self.log_panel.copy_all)
+        self.clear_log_button.clicked.connect(self.log_panel.clear)
 
         self.settings_panel.changed.connect(self._on_settings_changed)
         self.settings_panel.open_dir_button.clicked.connect(self._open_output_dir)
         self.task_panel.startRequested.connect(self.start_batch)
-        self.task_panel.cancelRequested.connect(self.runner.cancel)
+        self.task_panel.cancelRequested.connect(self._request_cancel)
         self.task_panel.openOutputRequested.connect(self._open_output_dir)
         self.theme_button.clicked.connect(self.toggle_theme)
         self.info_button.clicked.connect(self._show_about)
@@ -366,7 +458,7 @@ class MainWindow(QMainWindow):
         shortcut("Ctrl+Return", self.start_batch)
         shortcut("Ctrl+Enter", self.start_batch)
         shortcut("Delete", self._remove_selected)
-        shortcut("Esc", self.runner.cancel)
+        shortcut("Esc", self._request_cancel)
         shortcut("Ctrl+D", self.toggle_theme)
         shortcut("Ctrl+1", lambda: self.settings_panel.mode_control.set_value(ui_logic.MODE_LOSSLESS, notify=True))
         shortcut("Ctrl+2", lambda: self.settings_panel.mode_control.set_value(ui_logic.MODE_LOSSY, notify=True))
@@ -374,8 +466,65 @@ class MainWindow(QMainWindow):
         shortcut("Ctrl+-", self.preview_panel.view.zoom_out)
         shortcut("Ctrl+0", self.preview_panel.view.reset_view)
 
+    # --------------------------------------------------------------- geometry
+    def _on_main_split_moved(self, *_args) -> None:
+        if not self._setting_split:
+            self._rail_user_sized = True
+
+    def _apply_responsive_layout(self) -> None:
+        if not hasattr(self, "main_split"):
+            return
+        total = self.main_split.width()
+        if total > 0 and not self._rail_user_sized:
+            rail = ui_logic.rail_width(self.width())
+            rail = max(ui_logic.RAIL_MIN_WIDTH, min(rail, total - 540))
+            if rail > 0:
+                self._setting_split = True
+                self.main_split.setSizes([max(1, total - rail), rail])
+                self._setting_split = False
+        if not self._workspace_sized:
+            height = self.workspace_split.height()
+            if height > 200:
+                self._workspace_sized = True
+                self.workspace_split.setSizes([int(height * 0.62), int(height * 0.38)])
+        self._apply_queue_column_widths()
+
+    def _apply_queue_column_widths(self) -> None:
+        if self._fitting_columns:
+            return
+        viewport = self.table.viewport().width()
+        if viewport <= 0:
+            return
+        self._fitting_columns = True
+        try:
+            for column, width in QUEUE_FIXED_COLUMNS.items():
+                self.table.setColumnWidth(column, width)
+            self.table.setColumnWidth(
+                COL_NAME, ui_logic.queue_name_width(viewport, QUEUE_FIXED_TOTAL)
+            )
+        finally:
+            self._fitting_columns = False
+
+    def eventFilter(self, watched, event):  # noqa: N802
+        if watched is self.table.viewport() and event.type() == QEvent.Type.Resize:
+            self._apply_queue_column_widths()
+        return super().eventFilter(watched, event)
+
+    def resizeEvent(self, event):  # noqa: N802
+        super().resizeEvent(event)
+        if hasattr(self, "toast"):
+            self.toast.refresh_geometry()
+        self._apply_responsive_layout()
+
+    def showEvent(self, event):  # noqa: N802
+        super().showEvent(event)
+        QTimer.singleShot(0, self._apply_responsive_layout)
+
     # ------------------------------------------------------------------ queue
     def _choose_files(self) -> None:
+        if self.runner.running:
+            self._toast("压缩进行中，稍后再添加")
+            return
         patterns = " ".join(f"*{ext}" for ext in formats.DIALOG_EXTENSIONS)
         paths, _ = QFileDialog.getOpenFileNames(
             self, "选择图片", "", f"图片文件 ({patterns});;所有文件 (*)"
@@ -384,6 +533,9 @@ class MainWindow(QMainWindow):
             self.add_paths(paths)
 
     def _choose_folder(self) -> None:
+        if self.runner.running:
+            self._toast("压缩进行中，稍后再添加")
+            return
         directory = QFileDialog.getExistingDirectory(self, "选择文件夹")
         if directory:
             self.add_paths([directory])
@@ -417,6 +569,8 @@ class MainWindow(QMainWindow):
         animated = sum(1 for probe in probes.values() if probe.ok and probe.animated)
 
         if added:
+            if self.task_panel.state() in (TaskPanel.STATE_DONE, TaskPanel.STATE_CANCELLED):
+                self.task_panel.reset()
             self._store.remember_inputs(candidates[:10])
             message = f"已添加 {added} 个文件"
             if unsupported:
@@ -441,6 +595,8 @@ class MainWindow(QMainWindow):
             self._toast("先选中要移除的行")
             return
         self.model.remove_rows(rows)
+        if self.task_panel.state() in (TaskPanel.STATE_DONE, TaskPanel.STATE_CANCELLED):
+            self.task_panel.reset()
         self._sync_panels()
         self._toast(f"已移除 {len(rows)} 行")
 
@@ -451,7 +607,7 @@ class MainWindow(QMainWindow):
         if not self.model.rowCount():
             return
         self.model.clear()
-        self.preview_panel.clear()
+        self.preview_hint.setText(self.preview_panel.clear())
         self.task_panel.reset()
         self._sync_panels()
 
@@ -461,11 +617,29 @@ class MainWindow(QMainWindow):
             return
         target = not all(item.enabled for item in items)
         self.model.set_enabled_all(target)
-        self.select_all_button.setText("全部参与" if target else "全部跳过")
+        if self.task_panel.state() in (TaskPanel.STATE_DONE, TaskPanel.STATE_CANCELLED):
+            self.task_panel.reset()
         self._sync_panels()
+
+    def _refresh_select_all_label(self) -> None:
+        items = self.model.items()
+        busy = self.runner.running
+        for button in (
+            self.add_files_button,
+            self.add_folder_button,
+            self.remove_button,
+            self.clear_button,
+        ):
+            button.setEnabled(not busy)
+        all_enabled = bool(items) and all(item.enabled for item in items)
+        self.select_all_button.setText("全部跳过" if all_enabled else "全部参与")
+        self.select_all_button.setEnabled(bool(items) and not busy)
 
     def _on_table_clicked(self, index) -> None:
         if index.column() == COL_ENABLED:
+            if self.runner.running:
+                self._toast("压缩进行中，无法修改队列")
+                return
             self.model.toggle_row(index.row())
             self._sync_panels()
 
@@ -494,7 +668,10 @@ class MainWindow(QMainWindow):
             after = item.result.output
             after_size = item.result.new_size
         before_size = item.original_size
-        self.preview_panel.show_comparison(item.path, after, before_size, after_size)
+        hint = self.preview_panel.show_comparison(
+            item.path, after, before_size, after_size
+        )
+        self.preview_hint.setText(hint)
 
     # ------------------------------------------------------------------- run
     def start_batch(self) -> None:
@@ -534,14 +711,21 @@ class MainWindow(QMainWindow):
             self.model.apply_result(row, result)
 
         if queued:
-            self.task_panel.set_running(True)
+            self.task_panel.begin_run(queued)
             self.settings_panel.set_running(True)
-            self.task_panel.set_status_text(f"0 / {queued} 个文件")
-            self.task_panel.progress.setValue(0)
+            self._refresh_select_all_label()
             self._sync_status()
         else:
             self._toast("没有可压缩的文件")
             self._sync_panels()
+
+    def _request_cancel(self) -> None:
+        if not self.runner.running:
+            return
+        if self.runner.cancel():
+            self.task_panel.show_cancelling(self.runner.processed)
+            self._toast("正在取消 · 等待当前文件完成")
+            self._sync_status()
 
     def _effective_out_dir(self, plan: CompressionPlan) -> Path | None:
         if plan.inplace:
@@ -576,17 +760,15 @@ class MainWindow(QMainWindow):
 
     def _on_progress(self, done: int, total: int, saved: int) -> None:
         self.task_panel.show_progress(done, total, saved)
-        self.task_panel.set_status_text(f"{done} / {total} 个文件")
         self._sync_status()
 
     def _on_batch_finished(self, processed: int, failed: int, seconds: float) -> None:
         stats = self.model.stats()
-        self.task_panel.set_running(False)
         self.settings_panel.set_running(False)
         duration_text = f"{seconds:.1f} s"
         if self.runner.cancelled:
-            self.task_panel.show_cancelled(int(stats["processed"]), processed)
-            self._toast(f"已取消 · 完成 {stats['processed']} 个")
+            self.task_panel.show_cancelled(processed, self.runner.total)
+            self._toast(f"已取消 · 完成 {processed} 个")
         else:
             self.task_panel.show_result(
                 int(stats["processed"]),
@@ -604,8 +786,6 @@ class MainWindow(QMainWindow):
     def _on_settings_changed(self) -> None:
         self._plan = self.settings_panel.plan()
         self._sync_status()
-        if self.runner.running:
-            self.task_panel.set_status_text("正在压缩 · 设置改动将在下一批生效")
 
     def _sync_panels(self) -> None:
         count = self.model.rowCount()
@@ -614,22 +794,22 @@ class MainWindow(QMainWindow):
         self.empty_state.setVisible(count == 0)
         self.table.setVisible(count > 0)
         stats = self.model.stats()
-        ready = count > 0 and int(stats["enabled"]) > 0
-        self.task_panel.set_ready(ready, count, self.runner.running)
-        if ready and not self.runner.running:
-            enabled = int(stats["enabled"])
-            processed = int(stats["processed"])
-            if processed and processed >= enabled:
-                # A batch already ran; the summary block owns the outcome, so the
-                # label only needs to say the queue is ready to run again.
-                self.task_panel.set_status_text("本批已完成 · 调整设置后可再次压缩")
-            else:
-                self.task_panel.set_status_text(f"待压缩 {enabled} 个文件")
+        enabled = int(stats["enabled"])
+        ready = count > 0 and enabled > 0
+        self.task_panel.set_ready(ready, count, enabled, self.runner.running)
+        self._refresh_select_all_label()
         self._sync_status()
 
     def _sync_status(self) -> None:
         stats = self.model.stats()
-        self.status_text.setText(ui_logic.summary_line(stats, running=self.runner.running))
+        text = ui_logic.summary_line(
+            stats,
+            running=self.runner.running,
+            cancelling=self.runner.cancelling,
+        )
+        if self.runner.cancelled and not self.runner.running and stats.get("count"):
+            text += " · 已取消"
+        self.status_text.setText(text)
         saved = int(stats.get("saved", 0))
         self.status_saved.setText(human_size(saved) if saved else "—")
         ratio = float(stats.get("ratio", 0.0))
@@ -637,9 +817,19 @@ class MainWindow(QMainWindow):
         self.status_engine.setText(f"{stats.get('processed', 0)}/{stats.get('enabled', 0)}")
 
     def _sync_bottom_stack(self) -> None:
-        index = 0 if self.bottom_switch.value() == "preview" else 1
+        preview_mode = self.bottom_switch.value() == "preview"
+        index = 0 if preview_mode else 1
         self.bottom_stack.setCurrentIndex(index)
-        self._store.show_log = index == 1
+        self._store.show_log = not preview_mode
+        self.preview_hint.setVisible(preview_mode)
+        for widget in self.preview_controls:
+            widget.setVisible(preview_mode)
+        for widget in self.log_controls:
+            widget.setVisible(not preview_mode)
+        self.zoom_label.setText(f"{self.preview_panel.view.zoom_percent()}%")
+
+    def _on_zoom(self, _scale: float) -> None:
+        self.zoom_label.setText(f"{self.preview_panel.view.zoom_percent()}%")
 
     def _open_output_dir(self) -> None:
         directory = self._output_dir
@@ -667,7 +857,7 @@ class MainWindow(QMainWindow):
         self._refresh_theme_icons()
         self.drop_zone.refresh_theme()
         self.table.viewport().update()
-        self.preview_panel.view.update()
+        self.preview_panel.view.viewport().update()
         self.themeChanged.emit(self._mode)
 
     def set_theme(self, mode: str, resolved: str | None = None) -> None:
@@ -688,8 +878,9 @@ class MainWindow(QMainWindow):
         self.theme_button.refresh_icon()
         self.info_button.refresh_icon()
         self.task_panel.refresh_icons()
-        self.preview_panel.zoom_in_button.refresh_icon()
-        self.preview_panel.zoom_out_button.refresh_icon()
+        self.preview_panel.view.viewport().update()
+        self.zoom_in_button.refresh_icon()
+        self.zoom_out_button.refresh_icon()
         self.settings_panel.open_dir_button.refresh_icon()
 
     def _show_about(self) -> None:
@@ -728,10 +919,6 @@ class MainWindow(QMainWindow):
 
     def _toast(self, text: str) -> None:
         self.toast.show_message(text)
-
-    def resizeEvent(self, event):  # noqa: N802
-        super().resizeEvent(event)
-        self.toast.refresh_geometry()
 
     # drag & drop anywhere on the window
     def dragEnterEvent(self, event):  # noqa: N802

@@ -1,4 +1,4 @@
-"""The four panels that make up the workspace.
+"""The workspace panels.
 
 Each panel owns its controls and knows nothing about compression: it renders a
 plan and reports intent. That separation is what keeps the settings panel
@@ -22,15 +22,12 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
-    QSlider,
     QSizePolicy,
-    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
 from ..core import task_log
-from ..core.formats import FormatSpec
 from ..core.planner import CompressionPlan, Effort, MetadataPolicy, NamingPolicy, clamp_quality, clamp_scale
 from ..core.unit_report import human_size
 from . import fonts, icons, theme, ui_logic
@@ -38,9 +35,9 @@ from .preview import CompareView, load_pixmap
 from .widgets import (
     ChevronComboBox,
     IconButton,
-    MicroLabel,
     MonoLabel,
     PlusMinusSpinBox,
+    PressSlider,
     SegmentedControl,
     TaskSummary,
     divider,
@@ -110,14 +107,16 @@ class SettingsPanel(QFrame):
         # ---- quality
         quality_row = QHBoxLayout()
         quality_row.setSpacing(9)
-        self.quality_slider = QSlider(Qt.Orientation.Horizontal)
+        self.quality_slider = PressSlider()
         self.quality_slider.setRange(1, 100)
         self.quality_slider.setValue(plan.quality)
-        self.quality_slider.setMinimumWidth(120)
+        self.quality_slider.set_tick_values([25, 50, 75])
+        self.quality_slider.set_default_value(75)
+        self.quality_slider.setMinimumWidth(110)
         self.quality_spin = PlusMinusSpinBox()
         self.quality_spin.setRange(1, 100)
         self.quality_spin.setValue(plan.quality)
-        self.quality_spin.setFixedWidth(74)
+        self.quality_spin.setFixedWidth(76)
         quality_row.addWidget(self.quality_slider, 1)
         quality_row.addWidget(self.quality_spin)
         quality_widget = QWidget()
@@ -130,27 +129,24 @@ class SettingsPanel(QFrame):
         self.quality_hint = QLabel("")
         self.quality_hint.setObjectName("cardHint")
         self.quality_hint.setWordWrap(True)
-        body.addWidget(self.quality_hint)
+        form.addRow(self.quality_hint)
 
-        self.note_label = QLabel("")
-        self.note_label.setObjectName("noteLabel")
-        self.note_label.setWordWrap(True)
-        self.note_label.hide()
-        body.addWidget(self.note_label)
-
-        body.addWidget(divider())
+        form.addRow(divider())
 
         # ---- scale
         scale_row = QHBoxLayout()
         scale_row.setSpacing(9)
-        self.scale_slider = QSlider(Qt.Orientation.Horizontal)
+        self.scale_slider = PressSlider()
         self.scale_slider.setRange(5, 100)
         self.scale_slider.setValue(int(plan.scale_percent))
+        self.scale_slider.set_tick_values([25, 50, 75, 100])
+        self.scale_slider.set_default_value(100)
+        self.scale_slider.set_suffix(" %")
         self.scale_spin = PlusMinusSpinBox()
         self.scale_spin.setRange(5, 100)
         self.scale_spin.setValue(int(plan.scale_percent))
         self.scale_spin.setSuffix(" %")
-        self.scale_spin.setFixedWidth(80)
+        self.scale_spin.setFixedWidth(82)
         scale_row.addWidget(self.scale_slider, 1)
         scale_row.addWidget(self.scale_spin)
         scale_widget = QWidget()
@@ -165,14 +161,14 @@ class SettingsPanel(QFrame):
         self.scale_readout = MonoLabel("→ 尺寸未知")
         self.scale_readout.setObjectName("cardHint")
         self.scale_readout.setWordWrap(True)
-        body.addWidget(self.scale_readout)
+        form.addRow(self.scale_readout)
 
-        body.addWidget(divider())
+        form.addRow(divider())
 
         # ---- format / metadata
         self.format_combo = ChevronComboBox()
         self.format_combo.setSizeAdjustPolicy(ChevronComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
-        self.format_combo.setMinimumContentsLength(10)
+        self.format_combo.setMinimumContentsLength(8)
         self.format_combo.setMinimumHeight(30)
         _populate(self.format_combo, ui_logic.format_options(), ui_logic.KEEP_FORMAT_VALUE)
         form.addRow(_form_label("输出格式", "保持原格式时不会改变文件类型"), self.format_combo)
@@ -185,9 +181,15 @@ class SettingsPanel(QFrame):
         self.format_note = QLabel("")
         self.format_note.setObjectName("cardHint")
         self.format_note.setWordWrap(True)
-        body.addWidget(self.format_note)
+        form.addRow(self.format_note)
 
-        body.addWidget(divider())
+        self.note_label = QLabel("")
+        self.note_label.setObjectName("noteLabel")
+        self.note_label.setWordWrap(True)
+        self.note_label.hide()
+        form.addRow(self.note_label)
+
+        form.addRow(divider())
 
         # ---- output
         output_row = QHBoxLayout()
@@ -229,7 +231,7 @@ class SettingsPanel(QFrame):
         self.naming_combo = ChevronComboBox()
         self.naming_combo.setMinimumHeight(30)
         _populate(self.naming_combo, ui_logic.naming_options(), plan.naming.value)
-        self.naming_combo.setFixedWidth(126)
+        self.naming_combo.setFixedWidth(118)
         self.naming_value_edit = QLineEdit(plan.suffix)
         self.naming_value_edit.setMinimumHeight(30)
         naming_row.addWidget(self.naming_combo)
@@ -249,9 +251,9 @@ class SettingsPanel(QFrame):
         # an unwrapped label raises the panel's minimum width and the scroll area
         # then clips the card's right edge.
         self.naming_preview.setWordWrap(True)
-        body.addWidget(self.naming_preview)
+        form.addRow(self.naming_preview)
 
-        body.addWidget(divider())
+        form.addRow(divider())
 
         # ---- effort
         self.effort_control = SegmentedControl(ui_logic.effort_options())
@@ -263,7 +265,7 @@ class SettingsPanel(QFrame):
         self.workers_spin = PlusMinusSpinBox()
         self.workers_spin.setRange(0, 32)
         self.workers_spin.setValue(plan.workers)
-        self.workers_spin.setFixedWidth(74)
+        self.workers_spin.setFixedWidth(76)
         workers_hint = QLabel("0 = 自动（最多 4 线程）")
         workers_hint.setObjectName("cardHint")
         workers_row.addWidget(self.workers_spin)
@@ -490,10 +492,7 @@ class SettingsPanel(QFrame):
         self.quality_spin.setEnabled(has_quality)
         self.preset_control.setVisible(has_quality)
 
-        if has_quality:
-            self.quality_hint.setText(ui_logic.quality_hint(target, current_mode, plan.quality))
-        else:
-            self.quality_hint.setText(ui_logic.quality_hint(target, current_mode, plan.quality))
+        self.quality_hint.setText(ui_logic.quality_hint(target, current_mode, plan.quality))
 
         self.note_label.setVisible(bool(reason))
         if reason:
@@ -534,17 +533,36 @@ class SettingsPanel(QFrame):
 
 # =================================================================== task ===
 class TaskPanel(QFrame):
-    """Run controls, live progress and the post-batch summary."""
+    """Run controls, live progress and the post-batch summary.
+
+    The panel is a small state machine — empty / ready / running / cancelling /
+    done / cancelled. The state badge and the button set are derived from it, so
+    "start" and "cancel" can never both look like the primary action.
+    """
 
     startRequested = Signal()
     cancelRequested = Signal()
     openOutputRequested = Signal()
 
+    STATE_EMPTY = "empty"
+    STATE_READY = "ready"
+    STATE_RUNNING = "running"
+    STATE_CANCELLING = "cancelling"
+    STATE_DONE = "done"
+    STATE_CANCELLED = "cancelled"
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
+        self._state = self.STATE_EMPTY
+        self._total = 0
+
+        self.state_badge = QLabel("待开始")
+        self.state_badge.setObjectName("stateBadge")
+        self.state_badge.setProperty("state", "idle")
+
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
-        card, body = make_card("任务", eyebrow="RUN", parent=self)
+        card, body = make_card("任务", eyebrow="RUN", header_right=self.state_badge, parent=self)
         outer.addWidget(card)
 
         self.summary = TaskSummary()
@@ -564,9 +582,12 @@ class TaskPanel(QFrame):
 
         buttons = QHBoxLayout()
         buttons.setSpacing(8)
-        self.cancel_button = QPushButton("取消")
+        self.cancel_button = QPushButton("取消压缩")
         self.cancel_button.setObjectName("cancelButton")
-        self.cancel_button.setEnabled(False)
+        self.cancel_button.setMinimumWidth(96)
+        self.cancel_button.setIcon(icons.icon("stop", theme.tokens_for("light")["DANGER"], 16))
+        self.cancel_button.setIconSize(QSize(14, 14))
+        self.cancel_button.hide()
         self.open_button = QPushButton("打开输出目录")
         self.open_button.setObjectName("softButton")
         self.open_button.setEnabled(False)
@@ -574,6 +595,7 @@ class TaskPanel(QFrame):
         self.start_button.setObjectName("primaryButton")
         self.start_button.setIcon(icons.icon("play", theme.tokens_for("light")["ACCENT_ON"], 16))
         self.start_button.setIconSize(QSize(15, 15))
+        self.start_button.setMinimumWidth(112)
         self.start_button.setEnabled(False)
         self.start_button.setCursor(Qt.CursorShape.PointingHandCursor)
         buttons.addWidget(self.cancel_button)
@@ -586,47 +608,135 @@ class TaskPanel(QFrame):
         self.cancel_button.clicked.connect(self.cancelRequested.emit)
         self.open_button.clicked.connect(self.openOutputRequested.emit)
 
-    def set_ready(self, ready: bool, count: int, running: bool) -> None:
-        self.start_button.setEnabled(ready and not running)
-        self.cancel_button.setEnabled(running)
-        if not running and not ready:
-            self.status_label.setText("队列为空 · 添加图片后即可开始")
+    # ------------------------------------------------------------------ state
+    def state(self) -> str:
+        return self._state
+
+    def _set_state(self, state: str, label: str, badge_state: str) -> None:
+        self._state = state
+        self.state_badge.setText(label)
+        self.state_badge.setProperty("state", badge_state)
+        self._repolish(self.state_badge)
+
+    def _set_progress_state(self, state: str) -> None:
+        self.progress.setProperty("state", state)
+        self._repolish(self.progress)
+
+    def _terminal(self) -> bool:
+        return self._state in (self.STATE_DONE, self.STATE_CANCELLED)
+
+    def set_ready(self, ready: bool, count: int, enabled: int, running: bool) -> None:
+        """Reflect queue readiness; never clobber a finished batch's outcome."""
+        if running:
+            return
+        self.cancel_button.hide()
+        if self._terminal():
+            self.start_button.setText("再次压缩")
+            self.start_button.setEnabled(ready)
+            return
+        self.start_button.setText("开始压缩")
+        self.start_button.setEnabled(ready)
+        if count == 0:
+            self._set_state(self.STATE_EMPTY, "队列为空", "idle")
             self.summary.show_idle()
             self.progress.setValue(0)
+            self._set_progress_state("idle")
+            self.status_label.setText("队列为空 · 添加图片后即可开始")
+            self.open_button.setEnabled(False)
+        elif not ready:
+            self._set_state(self.STATE_EMPTY, "无可压缩项", "idle")
+            self.summary.show_idle()
+            self.status_label.setText("所有文件都被排除 · 勾选后即可开始")
+            self.open_button.setEnabled(False)
+        else:
+            self._set_state(self.STATE_READY, "待开始", "idle")
+            self.summary.show_ready(enabled)
+            self.progress.setValue(0)
+            self._set_progress_state("idle")
+            self.status_label.setText(f"待压缩 {enabled} 个文件")
+            self.open_button.setEnabled(False)
 
-    def set_running(self, running: bool) -> None:
-        self.start_button.setEnabled(not running and self.start_button.isEnabled())
-        self.cancel_button.setEnabled(running)
+    def begin_run(self, total: int) -> None:
+        self._total = max(1, total)
+        self._set_state(self.STATE_RUNNING, "运行中", "running")
+        self._set_progress_state("running")
+        self.progress.setValue(0)
+        self.summary.show_progress(0, self._total, 0)
+        self.status_label.setText(f"正在压缩 · 0 / {self._total}")
+        self.start_button.setText("压缩中…")
+        self.start_button.setEnabled(False)
+        self.cancel_button.setText("取消压缩")
+        self.cancel_button.setIcon(
+            icons.icon("stop", theme.tokens_for(theme.current_mode())["DANGER"], 16)
+        )
+        self.cancel_button.setEnabled(True)
+        self.cancel_button.show()
+        self.open_button.setEnabled(False)
+
+    def show_cancelling(self, done: int) -> None:
+        """Immediate feedback for the cancel click; the batch still has to
+        finish the files already inside an encoder."""
+        self._set_state(self.STATE_CANCELLING, "正在取消", "cancelling")
+        self._set_progress_state("cancelling")
+        self.cancel_button.setText("正在取消…")
+        self.cancel_button.setEnabled(False)
+        self.summary.show_cancelling(done, self._total)
+        self.status_label.setText("正在取消 · 等待当前文件完成")
 
     def set_status_text(self, text: str) -> None:
         self.status_label.setText(text)
 
     def show_progress(self, done: int, total: int, saved: int) -> None:
+        self._total = max(1, total)
         self.progress.setValue(int(1000 * done / total) if total else 0)
-        self.summary.show_progress(done, total, saved)
+        self.summary.show_progress(done, self._total, saved)
+        if self._state == self.STATE_CANCELLING:
+            self.status_label.setText(f"已处理 {done} / {self._total} · 正在取消")
+        elif self._state == self.STATE_RUNNING:
+            self.status_label.setText(f"正在压缩 · {done} / {self._total}")
 
     def show_result(self, total: int, saved: int, ratio: float, duration: str, failures: int) -> None:
+        self._set_state(self.STATE_DONE, "已完成", "done")
         self.progress.setValue(1000)
-        self.progress.setProperty("state", "failed" if failures else "done")
-        self._repolish(self.progress)
+        self._set_progress_state("failed" if failures else "done")
         self.summary.show_result(total, saved, ratio, duration, failures)
+        self.status_label.setText(
+            "本批完成 · 调整设置后可再次压缩" + (f" · {failures} 个失败" if failures else "")
+        )
+        self.start_button.setText("再次压缩")
+        self.start_button.setEnabled(True)
+        self.cancel_button.hide()
         self.open_button.setEnabled(True)
 
     def show_cancelled(self, done: int, total: int) -> None:
-        self.progress.setProperty("state", "idle")
-        self._repolish(self.progress)
-        self.summary.show_cancelled(done, total)
+        self._total = max(1, total)
+        self._set_state(self.STATE_CANCELLED, "已取消", "cancelled")
+        self.progress.setValue(int(1000 * done / self._total) if self._total else 0)
+        self._set_progress_state("cancelled")
+        self.summary.show_cancelled(done, self._total)
+        self.status_label.setText(
+            f"已取消 · 完成 {done} / {self._total} 个（已完成的结果已写入磁盘）"
+        )
+        self.start_button.setText("再次压缩")
+        self.start_button.setEnabled(True)
+        self.cancel_button.hide()
+        self.open_button.setEnabled(done > 0)
 
     def reset(self) -> None:
+        self._set_state(self.STATE_EMPTY, "队列为空", "idle")
         self.progress.setValue(0)
-        self.progress.setProperty("state", "idle")
-        self._repolish(self.progress)
+        self._set_progress_state("idle")
         self.summary.show_idle()
+        self.status_label.setText("队列为空 · 添加图片后即可开始")
+        self.start_button.setText("开始压缩")
+        self.start_button.setEnabled(False)
+        self.cancel_button.hide()
         self.open_button.setEnabled(False)
 
     def refresh_icons(self) -> None:
         tokens = theme.tokens_for(theme.current_mode())
         self.start_button.setIcon(icons.icon("play", tokens["ACCENT_ON"], 16))
+        self.cancel_button.setIcon(icons.icon("stop", tokens["DANGER"], 16))
 
     def _repolish(self, widget: QWidget) -> None:
         style = widget.style()
@@ -636,28 +746,14 @@ class TaskPanel(QFrame):
 
 
 # =================================================================== log ====
-class LogPanel(QFrame):
-    """Structured log view."""
+class LogPanel(QWidget):
+    """Structured log view. Its toolbar lives in the bottom card header."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(7)
-
-        header = QHBoxLayout()
-        header.setSpacing(6)
-        title = QLabel("任务日志")
-        title.setObjectName("logTitle")
-        self.clear_button = QPushButton("清空")
-        self.clear_button.setObjectName("ghostButton")
-        self.copy_button = QPushButton("复制全部")
-        self.copy_button.setObjectName("ghostButton")
-        header.addWidget(title)
-        header.addStretch(1)
-        header.addWidget(self.copy_button)
-        header.addWidget(self.clear_button)
-        layout.addLayout(header)
+        layout.setSpacing(0)
 
         self.view = QPlainTextEdit()
         self.view.setObjectName("logView")
@@ -665,9 +761,6 @@ class LogPanel(QFrame):
         self.view.setMaximumBlockCount(1200)
         self.view.setFont(fonts.make_font(size=9, mono=True))
         layout.addWidget(self.view, 1)
-
-        self.clear_button.clicked.connect(self.view.clear)
-        self.copy_button.clicked.connect(self.copy_all)
 
     def append_record(self, record: task_log.LogRecord) -> None:
         colors = theme.log_level_colors(theme.current_mode())
@@ -679,6 +772,9 @@ class LogPanel(QFrame):
         self.view.setTextCursor(cursor)
         self.view.ensureCursorVisible()
 
+    def clear(self) -> None:
+        self.view.clear()
+
     def copy_all(self) -> None:
         from PySide6.QtWidgets import QApplication
 
@@ -686,46 +782,16 @@ class LogPanel(QFrame):
 
 
 # ================================================================= preview ===
-class PreviewPanel(QFrame):
-    """Comparison stage with its own small toolbar."""
+class PreviewPanel(QWidget):
+    """The comparison stage. Its toolbar lives in the bottom card header."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(7)
-
-        header = QHBoxLayout()
-        header.setSpacing(6)
-        title = QLabel("预览对比")
-        title.setObjectName("logTitle")
-        self.zoom_label = MonoLabel("100%")
-        self.zoom_label.setObjectName("cardHint")
-        self.fit_button = QPushButton("适应")
-        self.fit_button.setObjectName("ghostButton")
-        self.zoom_out_button = IconButton("remove", "缩小", size=26)
-        self.zoom_in_button = IconButton("add-file", "放大", size=26)
-        self.hint_label = QLabel("拖动中缝对比")
-        self.hint_label.setObjectName("previewCaption")
-        header.addWidget(title)
-        header.addWidget(self.hint_label)
-        header.addStretch(1)
-        header.addWidget(self.zoom_label)
-        header.addWidget(self.zoom_out_button)
-        header.addWidget(self.zoom_in_button)
-        header.addWidget(self.fit_button)
-        layout.addLayout(header)
-
+        layout.setSpacing(0)
         self.view = CompareView()
         layout.addWidget(self.view, 1)
-
-        self.fit_button.clicked.connect(self.view.reset_view)
-        self.zoom_in_button.clicked.connect(self.view.zoom_in)
-        self.zoom_out_button.clicked.connect(self.view.zoom_out)
-        self.view.zoomChanged.connect(self._on_zoom)
-
-    def _on_zoom(self, _zoom: float) -> None:
-        self.zoom_label.setText(f"{self.view.zoom_percent()}%")
 
     def show_comparison(
         self,
@@ -733,21 +799,25 @@ class PreviewPanel(QFrame):
         after_path: Path | str | None,
         before_size: int = 0,
         after_size: int = 0,
-    ) -> None:
+    ) -> str:
         before = load_pixmap(before_path)
         after = load_pixmap(after_path) if after_path else None
+        if before is None:
+            self.view.set_images(None, None, "", "")
+            return "无法读取预览图"
         caption_before = f"原始 · {human_size(before_size)}" if before_size else "原始"
         caption_after = f"压缩后 · {human_size(after_size)}" if after_size else "压缩后"
         if after is None:
-            self.hint_label.setText("尚未压缩，显示原始图像")
+            hint = "尚未压缩 · 显示原图 · Ctrl+滚轮缩放"
+            self.view.set_images(before, None, caption_before, "")
         else:
-            self.hint_label.setText("拖动中缝对比 · 滚轮缩放")
-        self.view.set_images(before, after, caption_before, caption_after)
-        self._on_zoom(self.view._zoom)
+            hint = "拖动中缝对比 · Ctrl+滚轮缩放 · 滚轮上下滚动"
+            self.view.set_images(before, after, caption_before, caption_after)
+        return hint
 
-    def clear(self) -> None:
+    def clear(self) -> str:
         self.view.clear()
-        self.hint_label.setText("拖动中缝对比")
+        return "选择队列中的文件以查看对比"
 
 
 def make_scroll(inner: QWidget) -> QScrollArea:

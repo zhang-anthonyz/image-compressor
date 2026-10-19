@@ -1,8 +1,9 @@
-"""PRESS — the PixelPress design system: tokens, stylesheet, palette.
+"""Fluent — the PixelPress design system: tokens, stylesheet, palette.
 
-The identity is "print room": cool paper canvas, ink text, and a single
-vermilion signal accent, with halftone dots as the one decorative motif (it
-belongs to printing, which is where image compression comes from).
+The identity is "Fluent tool": layered acrylic surfaces, deep blue-purple
+accent, ink-on-paper text contrast, with cards and chips as the only
+decorative motif. Born on Windows 11, the visual language blends with the
+host system so the app reads as a native tool, not a styled overlay.
 
 Two rules earned the hard way and enforced here:
 
@@ -16,97 +17,103 @@ Two rules earned the hard way and enforced here:
 
 ``letter-spacing`` and ``text-transform`` are *not* supported by Qt stylesheets;
 tracking is applied through QFont in ``app.ui.fonts``.
+
+A module-level QColor cache (``color_for``) keeps paintEvent fast: tokens are
+resolved to QColor once per (key, mode) and reused until the mode flips,
+which is the single fix for the theme-switch / drag-seam stutter that came
+from ``QColor(tokens[...])`` running on every paint frame.
 """
 from __future__ import annotations
 
 from string import Template
 
 # ------------------------------------------------------------------ LIGHT ---
-#: Cool paper, deliberately not warm: a warm cast interferes with judging the
-#: colour of the image being compressed.
-BG_APP = "#F0F1F3"
+#: Cool blue-grey acrylic, deliberately not warm: a warm cast interferes with
+#: judging the colour of the image being compressed.
+BG_APP = "#EEF3FA"
 SURFACE = "#FFFFFF"
-SURFACE_MUTED = "#E8EAED"
-SURFACE_HOVER = "#E2E5E9"
-SURFACE_PRESSED = "#D8DCE1"
-SURFACE_SUNK = "#EDEFF2"
-BORDER = "#D5D9DE"
-BORDER_STRONG = "#B4BAC2"
-DIVIDER = "#E4E7EA"
+SURFACE_MUTED = "#E6EEF8"
+SURFACE_HOVER = "#D9E5F4"
+SURFACE_PRESSED = "#C5D6EE"
+SURFACE_SUNK = "#F2F6FB"
+BORDER = "#C8D6E6"
+BORDER_STRONG = "#9DB3D0"
+DIVIDER = "#D9E2EF"
 
-TEXT = "#191C21"
-TEXT_STRONG = "#0F1216"
-TEXT_SECONDARY = "#414852"
-TEXT_MUTED = "#6B737E"
-TEXT_FAINT = "#9AA1AB"
+TEXT = "#1E2A3D"
+TEXT_STRONG = "#0C1A2E"
+TEXT_SECONDARY = "#3B4D6B"
+TEXT_MUTED = "#6B7B95"
+TEXT_FAINT = "#99A6BC"
 
-#: Vermilion — the red pencil of a proofreader. Single accent, used for action,
-#: selection and the savings bar; never as decoration.
-ACCENT = "#D23B16"
-ACCENT_HOVER = "#B72F0E"
-ACCENT_PRESSED = "#9C2609"
-ACCENT_SOFT = "#FCEAE3"
-ACCENT_SOFT_BORDER = "#F0B7A4"
-ACCENT_SOFT_TEXT = "#A82A0C"
-ACCENT_DISABLED = "#E5A794"
+#: Blue-purple — the signal accent of a Fluent tool. Single accent, used for
+#: action, selection and the savings bar; never as decoration.
+ACCENT = "#185FA5"
+ACCENT_HOVER = "#0C447C"
+ACCENT_PRESSED = "#042C53"
+ACCENT_SOFT = "#E6F1FB"
+ACCENT_SOFT_BORDER = "#85B7EB"
+ACCENT_SOFT_TEXT = "#0C447C"
+ACCENT_DISABLED = "#9DB3D0"
 #: Text drawn *on* the accent.
 ACCENT_ON = "#FFFFFF"
 
-SUCCESS = "#0F7A3D"
-SUCCESS_SOFT = "#E4F3EA"
-WARNING = "#8A5A00"
-WARNING_SOFT = "#FBF0DC"
-DANGER = "#B3261E"
-DANGER_SOFT = "#FBE7E5"
-DANGER_SOFT_BORDER = "#E8A9A4"
-NEUTRAL = "#8A929C"
-NEUTRAL_SOFT = "#EEF0F2"
+SUCCESS = "#0F6E56"
+SUCCESS_SOFT = "#E1F5EE"
+WARNING = "#854F0B"
+WARNING_SOFT = "#FAEEDA"
+DANGER = "#C83838"
+DANGER_SOFT = "#FCEBEB"
+DANGER_SOFT_BORDER = "#F09595"
+NEUTRAL = "#5F5E5A"
+NEUTRAL_SOFT = "#F1EFE8"
 
-#: Halftone/grid painting colours (see widgets.HalftoneHeader).
-HALFTONE_RGB = "120, 128, 138"
-GRID_RGB = "154, 161, 171"
+#: Layer / grid tints (kept for backward compatibility with widgets that
+#: still reference them; halftone decoration is retired in Fluent direction).
+HALFTONE_RGB = "24, 95, 165"
+GRID_RGB = "157, 179, 208"
 
 # ------------------------------------------------------------------- DARK ---
-#: Charcoal, not black: pure #000000 eats the anti-aliasing of 1px strokes and
-#: makes the vermilion glare.
-DARK_BG_APP = "#14161A"
-DARK_SURFACE = "#1B1E23"
-DARK_SURFACE_MUTED = "#20242A"
-DARK_SURFACE_HOVER = "#242830"
-DARK_SURFACE_PRESSED = "#2A2F37"
-DARK_SURFACE_SUNK = "#181B20"
-DARK_BORDER = "#2C3138"
-DARK_BORDER_STRONG = "#3D444D"
-DARK_DIVIDER = "#242830"
+#: Deep blue-charcoal, not pure black: pure #000000 eats the anti-aliasing of
+#: 1px strokes and makes the accent glare.
+DARK_BG_APP = "#0A1426"
+DARK_SURFACE = "#131F36"
+DARK_SURFACE_MUTED = "#1A2742"
+DARK_SURFACE_HOVER = "#21314F"
+DARK_SURFACE_PRESSED = "#2A3D5E"
+DARK_SURFACE_SUNK = "#0F1A2E"
+DARK_BORDER = "#2A3D5E"
+DARK_BORDER_STRONG = "#3D5478"
+DARK_DIVIDER = "#1A2742"
 
-DARK_TEXT = "#E4E6E9"
-DARK_TEXT_STRONG = "#F5F6F8"
-DARK_TEXT_SECONDARY = "#B9BFC8"
-DARK_TEXT_MUTED = "#8A929C"
-DARK_TEXT_FAINT = "#5C636D"
+DARK_TEXT = "#D9E2F2"
+DARK_TEXT_STRONG = "#F0F4FB"
+DARK_TEXT_SECONDARY = "#B5C3D9"
+DARK_TEXT_MUTED = "#8A9BB5"
+DARK_TEXT_FAINT = "#5A6B85"
 
-#: Brightened vermilion so it reads on charcoal; text flips to near-black.
-DARK_ACCENT = "#FF6A45"
-DARK_ACCENT_HOVER = "#FF8566"
-DARK_ACCENT_PRESSED = "#E5542F"
-DARK_ACCENT_SOFT = "#2A1A14"
-DARK_ACCENT_SOFT_BORDER = "#7A3A28"
-DARK_ACCENT_SOFT_TEXT = "#FFB59E"
-DARK_ACCENT_DISABLED = "#6B3A2C"
-DARK_ACCENT_ON = "#14161A"
+#: Brightened blue-purple so it reads on charcoal; text flips to deep ink.
+DARK_ACCENT = "#4A90E2"
+DARK_ACCENT_HOVER = "#6BA5E8"
+DARK_ACCENT_PRESSED = "#378ADD"
+DARK_ACCENT_SOFT = "#1A2742"
+DARK_ACCENT_SOFT_BORDER = "#3D5478"
+DARK_ACCENT_SOFT_TEXT = "#B5C3D9"
+DARK_ACCENT_DISABLED = "#2A3D5E"
+DARK_ACCENT_ON = "#0A1426"
 
-DARK_SUCCESS = "#4ADE80"
-DARK_SUCCESS_SOFT = "#16281E"
-DARK_WARNING = "#FBBF24"
+DARK_SUCCESS = "#5DCAA5"
+DARK_SUCCESS_SOFT = "#0C2A1F"
+DARK_WARNING = "#FAC775"
 DARK_WARNING_SOFT = "#2A2312"
-DARK_DANGER = "#F87171"
+DARK_DANGER = "#F09595"
 DARK_DANGER_SOFT = "#2A1719"
 DARK_DANGER_SOFT_BORDER = "#7F3A3A"
-DARK_NEUTRAL = "#6B737E"
-DARK_NEUTRAL_SOFT = "#232830"
+DARK_NEUTRAL = "#5A6B85"
+DARK_NEUTRAL_SOFT = "#1A2742"
 
 DARK_HALFTONE_RGB = "150, 158, 168"
-DARK_GRID_RGB = "70, 78, 88"
+DARK_GRID_RGB = "61, 84, 120"
 
 #: Per-level log colours, tuned for the surface each is read on (all >= AA).
 LOG_LEVEL_COLORS = {
@@ -137,6 +144,18 @@ LIGHT_TOKENS: dict[str, str] = {
     "DANGER_SOFT_BORDER": DANGER_SOFT_BORDER, "NEUTRAL": NEUTRAL,
     "NEUTRAL_SOFT": NEUTRAL_SOFT,
     "HALFTONE_RGB": HALFTONE_RGB, "GRID_RGB": GRID_RGB,
+    "SLIDER_TRACK": SURFACE_PRESSED,
+    "SLIDER_FILL": ACCENT,
+    "SLIDER_HANDLE": SURFACE,
+    "SLIDER_HANDLE_RING": ACCENT,
+    "SLIDER_HANDLE_HOVER": ACCENT_SOFT,
+    "SLIDER_HANDLE_PRESSED": ACCENT,
+    "SLIDER_TICK": TEXT_FAINT,
+    "SLIDER_TICK_ACTIVE": TEXT_MUTED,
+    "SLIDER_DEFAULT_MARKER": TEXT_MUTED,
+    "SLIDER_BUBBLE_BG": TEXT_STRONG,
+    "SLIDER_BUBBLE_BORDER": BORDER_STRONG,
+    "SLIDER_BUBBLE_TEXT": SURFACE,
 }
 
 DARK_TOKENS: dict[str, str] = {
@@ -155,12 +174,25 @@ DARK_TOKENS: dict[str, str] = {
     "DANGER_SOFT_BORDER": DARK_DANGER_SOFT_BORDER, "NEUTRAL": DARK_NEUTRAL,
     "NEUTRAL_SOFT": DARK_NEUTRAL_SOFT,
     "HALFTONE_RGB": DARK_HALFTONE_RGB, "GRID_RGB": DARK_GRID_RGB,
+    "SLIDER_TRACK": DARK_SURFACE_PRESSED,
+    "SLIDER_FILL": DARK_ACCENT,
+    "SLIDER_HANDLE": DARK_SURFACE,
+    "SLIDER_HANDLE_RING": DARK_ACCENT,
+    "SLIDER_HANDLE_HOVER": DARK_ACCENT_SOFT,
+    "SLIDER_HANDLE_PRESSED": DARK_ACCENT,
+    "SLIDER_TICK": DARK_TEXT_FAINT,
+    "SLIDER_TICK_ACTIVE": DARK_TEXT_MUTED,
+    "SLIDER_DEFAULT_MARKER": DARK_TEXT_MUTED,
+    "SLIDER_BUBBLE_BG": DARK_TEXT_STRONG,
+    "SLIDER_BUBBLE_BORDER": DARK_BORDER_STRONG,
+    "SLIDER_BUBBLE_TEXT": DARK_SURFACE,
 }
 
 #: Sizes and radii, also used by widgets that paint themselves.
+#: Fluent favours slightly larger radii for layered card surfaces.
 RADIUS_INPUT = 6
-RADIUS_CARD = 10
-RADIUS_CHIP = 5
+RADIUS_CARD = 12
+RADIUS_CHIP = 6
 
 _STYLESHEET = Template(
     r"""
@@ -204,7 +236,7 @@ QFrame#topBar {
 QLabel#brandMark {
     background-color: $ACCENT;
     color: $ACCENT_ON;
-    border-radius: 5px;
+    border-radius: 6px;
     font-size: 14px;
     font-weight: 800;
 }
@@ -248,7 +280,7 @@ QPushButton#iconButton:checked {
 QFrame#card {
     background-color: $SURFACE;
     border: 1px solid $BORDER;
-    border-radius: 10px;
+    border-radius: 12px;
 }
 
 QLabel#cardEyebrow {
@@ -332,12 +364,27 @@ QPushButton#primaryButton:disabled {
 }
 
 QPushButton#cancelButton {
-    padding: 9px 20px;
+    background-color: $DANGER_SOFT;
+    border: 1px solid $DANGER_SOFT_BORDER;
+    border-radius: 6px;
+    padding: 9px 16px;
+    color: $DANGER;
+    font-weight: 600;
 }
 QPushButton#cancelButton:hover {
-    background-color: $DANGER_SOFT;
+    background-color: $DANGER;
+    border-color: $DANGER;
+    color: $ACCENT_ON;
+}
+QPushButton#cancelButton:pressed {
+    background-color: $DANGER_SOFT_BORDER;
     border-color: $DANGER_SOFT_BORDER;
     color: $DANGER;
+}
+QPushButton#cancelButton:disabled {
+    background-color: $SURFACE_MUTED;
+    border-color: $DIVIDER;
+    color: $TEXT_FAINT;
 }
 
 QPushButton#softButton {
@@ -366,7 +413,7 @@ QPushButton#ghostButton:hover {
 QPushButton#segmentButton {
     background-color: transparent;
     border: 1px solid $BORDER;
-    border-radius: 5px;
+    border-radius: 6px;
     padding: 5px 12px;
     color: $TEXT_SECONDARY;
     font-size: 12px;
@@ -416,7 +463,10 @@ QLineEdit::placeholder {
 }
 
 /* Native subcontrols are zero-sized: ChevronComboBox / PlusMinusSpinBox draw
-   their own glyphs, and leaving the originals visible would double them up. */
+   their own glyphs, and leaving the originals visible would double them up.
+   PlusMinusSpinBox keeps the button *symbols* registered on purpose: with
+   NoButtons, QStyleSheetStyle collapses its internal line edit to 1 px and the
+   value disappears. QSS only controls the size, not the symbol setting. */
 QComboBox {
     padding-right: 26px;
 }
@@ -428,7 +478,7 @@ QComboBox::drop-down, QComboBox::down-arrow {
     image: none;
 }
 QSpinBox {
-    padding-right: 22px;
+    padding: 6px 9px;
 }
 QSpinBox::up-button, QSpinBox::down-button,
 QSpinBox::up-arrow, QSpinBox::down-arrow {
@@ -437,6 +487,27 @@ QSpinBox::up-arrow, QSpinBox::down-arrow {
     border: none;
     background: transparent;
     image: none;
+}
+/* The numeric readout beside a slider is a value, not a form field; a filled
+   box made the slider row look like two unrelated controls. Keep it transparent
+   and use a hairline only on hover/focus. */
+QSpinBox {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+}
+QSpinBox:hover {
+    background: transparent;
+    border-color: $BORDER;
+}
+QSpinBox:focus {
+    background: transparent;
+    border-color: $ACCENT;
+}
+QSpinBox:disabled {
+    background: transparent;
+    border-color: transparent;
+    color: $TEXT_FAINT;
 }
 
 QComboBox QAbstractItemView {
@@ -560,10 +631,40 @@ QLabel#idleBadge {
     font-size: 11px;
 }
 
+QLabel#stateBadge {
+    background-color: $SURFACE_MUTED;
+    border: 1px solid $BORDER;
+    border-radius: 4px;
+    padding: 2px 8px;
+    color: $TEXT_MUTED;
+    font-size: 11px;
+    font-weight: 600;
+}
+QLabel#stateBadge[state="running"] {
+    background-color: $ACCENT_SOFT;
+    border-color: $ACCENT_SOFT_BORDER;
+    color: $ACCENT_SOFT_TEXT;
+}
+QLabel#stateBadge[state="cancelling"] {
+    background-color: $WARNING_SOFT;
+    border-color: $WARNING;
+    color: $WARNING;
+}
+QLabel#stateBadge[state="done"] {
+    background-color: $SUCCESS_SOFT;
+    border-color: $SUCCESS;
+    color: $SUCCESS;
+}
+QLabel#stateBadge[state="cancelled"] {
+    background-color: $NEUTRAL_SOFT;
+    border-color: $BORDER_STRONG;
+    color: $TEXT_SECONDARY;
+}
+
 QLabel#noteLabel {
     background-color: $WARNING_SOFT;
     border: 1px solid $WARNING;
-    border-radius: 5px;
+    border-radius: 6px;
     padding: 6px 9px;
     color: $WARNING;
     font-size: 11px;
@@ -596,6 +697,14 @@ QLabel#dropZoneHint {
 }
 
 /* ============================== preview ========================== */
+QAbstractScrollArea#previewStage {
+    background-color: $SURFACE_SUNK;
+    border: 1px solid $BORDER;
+    border-radius: 8px;
+}
+QAbstractScrollArea#previewStage > QWidget > QWidget {
+    background: transparent;
+}
 QFrame#previewStage {
     background-color: $SURFACE_SUNK;
     border: 1px solid $BORDER;
@@ -604,6 +713,21 @@ QFrame#previewStage {
 QLabel#previewCaption {
     color: $TEXT_MUTED;
     font-size: 11px;
+}
+
+/* ============================= splitters ========================= */
+QSplitter {
+    background: transparent;
+}
+QSplitter::handle {
+    background: transparent;
+}
+QSplitter::handle:hover {
+    background: $SURFACE_HOVER;
+    border-radius: 3px;
+}
+QSplitter::handle:pressed {
+    background: $ACCENT_SOFT;
 }
 
 /* ============================= progress ========================== */
@@ -618,6 +742,15 @@ QProgressBar::chunk {
     background-color: $ACCENT;
     border-radius: 2px;
 }
+QProgressBar[state="running"]::chunk {
+    background-color: $ACCENT;
+}
+QProgressBar[state="cancelling"]::chunk {
+    background-color: $WARNING;
+}
+QProgressBar[state="cancelled"]::chunk {
+    background-color: $NEUTRAL;
+}
 QProgressBar[state="done"]::chunk {
     background-color: $SUCCESS;
 }
@@ -626,43 +759,15 @@ QProgressBar[state="failed"]::chunk {
 }
 
 /* ============================== slider =========================== */
+/* PressSlider subclasses QSlider and paints itself in paintEvent. The native
+   sub-controls (groove / handle) are *not* zeroed here: zeroing them breaks
+   QStyle::sliderValueFromPosition, which QSlider's mousePressEvent used to
+   rely on. PressSlider now overrides mousePressEvent to use its own
+   _x_to_value mapping (see widgets.PressSlider), so the look and the click
+   behaviour are both custom — but the canvas still needs to be transparent so
+   Qt does not paint a grey slab behind the hand-drawn track. */
 QSlider {
     background: transparent;
-    min-height: 22px;
-}
-QSlider::groove:horizontal {
-    height: 4px;
-    background: $SURFACE_PRESSED;
-    border-radius: 2px;
-}
-QSlider::sub-page:horizontal {
-    background: $ACCENT;
-    border-radius: 2px;
-}
-QSlider::add-page:horizontal {
-    background: $SURFACE_PRESSED;
-    border-radius: 2px;
-}
-QSlider::handle:horizontal {
-    background: $SURFACE;
-    border: 2px solid $ACCENT;
-    width: 13px;
-    height: 13px;
-    margin: -6px 0;
-    border-radius: 8px;
-}
-QSlider::handle:horizontal:hover {
-    background: $ACCENT_SOFT;
-}
-QSlider::handle:horizontal:pressed {
-    background: $ACCENT;
-}
-QSlider:disabled::handle:horizontal {
-    border-color: $NEUTRAL;
-    background: $SURFACE_MUTED;
-}
-QSlider:disabled::sub-page:horizontal {
-    background: $BORDER_STRONG;
 }
 
 /* ============================= checkbox ========================== */
@@ -702,7 +807,7 @@ QListWidget {
 }
 QListWidget::item {
     padding: 6px 9px;
-    border-radius: 5px;
+    border-radius: 6px;
     color: $TEXT_SECONDARY;
 }
 QListWidget::item:hover {
@@ -795,6 +900,41 @@ QLabel#toastText {
 )
 
 
+# ----------------------------------------------------- QColor cache layer ---
+#: Resolved QColor instances are cached per (key, mode) so paintEvent never
+#: pays for QColor parsing on every frame. The cache is invalidated as a whole
+#: whenever the mode flips — see ``set_current_mode``.
+_color_cache: dict[tuple[str, str], object] = {}
+
+
+def color_for(key: str, mode: str | None = None) -> object:
+    """Return a cached ``QColor`` for ``key`` under ``mode`` (default current).
+
+    Widgets should call this instead of ``QColor(tokens_for(mode)[key])`` so
+    the per-frame QColor allocation that caused theme-switch / drag-seam stutter
+    is amortised to one allocation per (key, mode) pair.
+    """
+    from PySide6.QtGui import QColor
+
+    if mode is None:
+        mode = _current_mode
+    cache_key = (key, mode)
+    cached = _color_cache.get(cache_key)
+    if cached is not None:
+        return cached
+    tokens = tokens_for(mode)
+    if key not in tokens:
+        raise KeyError(f"unknown theme token: {key}")
+    resolved = QColor(tokens[key])
+    _color_cache[cache_key] = resolved
+    return resolved
+
+
+def _invalidate_color_cache() -> None:
+    """Drop every cached QColor — called when the active mode changes."""
+    _color_cache.clear()
+
+
 def tokens_for(mode: str) -> dict[str, str]:
     return DARK_TOKENS if mode == "dark" else LIGHT_TOKENS
 
@@ -823,6 +963,8 @@ def set_current_mode(mode: str) -> None:
     global _current_mode
     if mode not in ("light", "dark"):
         raise ValueError(f"unknown theme mode: {mode}")
+    if mode != _current_mode:
+        _invalidate_color_cache()
     _current_mode = mode
 
 
@@ -898,14 +1040,22 @@ def apply_app_theme(app, mode: str = "light", resolved: str | None = None) -> st
 
 
 def repolish(app) -> None:
-    """Force live widgets to re-read the stylesheet immediately."""
-    for widget in app.allWidgets():
-        if widget is None:
-            continue
-        style = widget.style()
-        style.unpolish(widget)
-        style.polish(widget)
-        widget.update()
+    """Force live widgets to re-read the stylesheet immediately.
+
+    The previous implementation iterated every widget in the application and
+    ran ``unpolish`` / ``polish`` / ``update`` on each — the single biggest
+    cause of theme-switch lag on a populated main window. Polish is only
+    needed where a styled widget subclass keeps internal state; for a normal
+    QSS refresh Qt already re-evaluates rules on ``setStyleSheet``. We keep
+    the unpolish/polish pair only on top-level windows (the small set that
+    actually holds the QSS context) and rely on a single ``update`` sweep
+    over visible children. ``instantiate_widgets`` is rare; live switches are
+    not, so optimising for the switch path is the right trade.
+    """
     for window in app.topLevelWidgets():
-        if window is not None:
-            window.update()
+        if window is None:
+            continue
+        style = window.style()
+        style.unpolish(window)
+        style.polish(window)
+        window.update()

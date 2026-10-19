@@ -17,6 +17,7 @@ from PySide6.QtWidgets import QStyle, QStyledItemDelegate, QStyleOptionViewItem
 from ..core import pipeline
 from ..core.unit_report import dimensions, human_size, saved_percent
 from . import fonts, theme
+from .theme import color_for
 
 COL_ENABLED = 0
 COL_NAME = 1
@@ -112,8 +113,14 @@ class QueueModel(QAbstractTableModel):
         return 0 if parent.isValid() else len(HEADERS)
 
     def headerData(self, section, orientation, role=Qt.ItemDataRole.DisplayRole):  # noqa: N802
-        if orientation == Qt.Orientation.Horizontal and role == Qt.ItemDataRole.DisplayRole:
+        if orientation != Qt.Orientation.Horizontal:
+            return None
+        if role == Qt.ItemDataRole.DisplayRole:
             return HEADERS[section]
+        if role == Qt.ItemDataRole.TextAlignmentRole:
+            if section in (COL_DIMENSIONS, COL_ORIGINAL, COL_RESULT, COL_SAVINGS):
+                return int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            return int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         return None
 
     def flags(self, index):
@@ -157,6 +164,9 @@ class QueueModel(QAbstractTableModel):
 
         if role == Qt.ItemDataRole.ToolTipRole:
             lines = [str(item.path)]
+            dimensions_text = item.dimensions_text
+            if dimensions_text and dimensions_text != "—":
+                lines.append(f"尺寸：{dimensions_text}")
             if item.probe is not None and not item.probe.ok:
                 lines.append(item.probe.error)
             if item.message:
@@ -168,14 +178,13 @@ class QueueModel(QAbstractTableModel):
             return "\n".join(lines)
 
         if role == Qt.ItemDataRole.ForegroundRole:
-            tokens = theme.tokens_for(theme.current_mode())
             if item.status == pipeline.STATUS_FAILED:
-                return QColor(tokens["DANGER"])
+                return color_for("DANGER")
             if item.status == pipeline.STATUS_SKIPPED:
-                return QColor(tokens["TEXT_FAINT"])
+                return color_for("TEXT_FAINT")
             if column == COL_NAME:
-                return QColor(tokens["TEXT_STRONG"] if item.enabled else tokens["TEXT_FAINT"])
-            return QColor(tokens["TEXT_SECONDARY"])
+                return color_for("TEXT_STRONG" if item.enabled else "TEXT_FAINT")
+            return color_for("TEXT_SECONDARY")
 
         return None
 
@@ -330,52 +339,53 @@ class QueueDelegate(QStyledItemDelegate):
             super().paint(painter, option, index)
             return
 
-        tokens = theme.tokens_for(theme.current_mode())
         painter.save()
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
         rect = QRectF(option.rect).adjusted(0.5, 0.5, -0.5, -0.5)
         row_rect = QRectF(option.rect)
 
-        # --- row background: selection beats hover beats nothing
+        # --- row background: selection beats hover beats nothing. A plain rect
+        # per cell (rather than a rounded rect with margins) joins across column
+        # boundaries into one continuous row highlight.
         if option.state & QStyle.StateFlag.State_Selected:
-            painter.setBrush(QColor(tokens["ACCENT_SOFT"]))
+            painter.setBrush(color_for("ACCENT_SOFT"))
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawRoundedRect(row_rect.adjusted(3, 1, -3, -1), 5, 5)
+            painter.drawRect(row_rect.adjusted(0, 1, 0, -1))
         elif option.state & QStyle.StateFlag.State_MouseOver:
-            painter.setBrush(QColor(tokens["SURFACE_HOVER"]))
+            painter.setBrush(color_for("SURFACE_HOVER"))
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawRoundedRect(row_rect.adjusted(3, 1, -3, -1), 5, 5)
+            painter.drawRect(row_rect.adjusted(0, 1, 0, -1))
 
-        painter.setPen(QPen(QColor(tokens["DIVIDER"]), 1))
+        painter.setPen(QPen(color_for("DIVIDER"), 1))
         painter.drawLine(
             int(row_rect.left()) + 3, int(row_rect.bottom()),
             int(row_rect.right()) - 3, int(row_rect.bottom()),
         )
 
         if index.column() == COL_ENABLED:
-            self._paint_checkbox(painter, rect, item, tokens)
+            self._paint_checkbox(painter, rect, item)
         elif index.column() == COL_SAVINGS:
             # One place for status: the rightmost column shows the savings bar
             # once there is a result, and the status pill until then.
             if item.result is not None and item.new_size:
-                self._paint_savings(painter, rect, item, tokens)
-            elif item.status != pipeline.STATUS_PENDING:
-                self._paint_status_pill(painter, rect, item, tokens)
+                self._paint_savings(painter, rect, item)
+            else:
+                self._paint_status_pill(painter, rect, item)
         else:
-            self._paint_text(painter, rect, index, item, tokens)
+            self._paint_text(painter, rect, index, item)
 
         painter.restore()
 
     # ------------------------------------------------------------- primitives
-    def _paint_text(self, painter, rect, index, item, tokens) -> None:
+    def _paint_text(self, painter, rect, index, item) -> None:
         column = index.column()
         text = index.data(Qt.ItemDataRole.DisplayRole) or ""
         if not text:
             return
         font = index.data(Qt.ItemDataRole.FontRole) or self._base_font()
         painter.setFont(font)
-        painter.setPen(index.data(Qt.ItemDataRole.ForegroundRole) or QColor(tokens["TEXT"]))
+        painter.setPen(index.data(Qt.ItemDataRole.ForegroundRole) or color_for("TEXT"))
 
         align = index.data(Qt.ItemDataRole.TextAlignmentRole) or int(
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
@@ -385,13 +395,13 @@ class QueueDelegate(QStyledItemDelegate):
         target = rect.adjusted(padding, 0, -padding + 2, 0)
 
         metrics = QFontMetrics(font)
-        if column == COL_NAME:
-            elided = metrics.elidedText(text, Qt.TextElideMode.ElideMiddle, int(target.width()))
-            painter.drawText(target, alignment, elided)
-        else:
-            painter.drawText(target, alignment, text)
+        # Every text column elides rather than spilling into its neighbour. The
+        # full value is always available through the model's tooltip.
+        mode = Qt.TextElideMode.ElideMiddle if column in (COL_NAME, COL_DIMENSIONS) else Qt.TextElideMode.ElideRight
+        elided = metrics.elidedText(text, mode, max(0, int(target.width())))
+        painter.drawText(target, alignment, elided)
 
-    def _paint_checkbox(self, painter, rect, item, tokens) -> None:
+    def _paint_checkbox(self, painter, rect, item) -> None:
         size = 15.0
         box = QRectF(
             rect.center().x() - size / 2 + 2,
@@ -401,23 +411,23 @@ class QueueDelegate(QStyledItemDelegate):
         )
         if item.status == pipeline.STATUS_SKIPPED:
             checked = False
-            color = QColor(tokens["SURFACE_MUTED"])
-            border = QColor(tokens["DIVIDER"])
+            color = color_for("SURFACE_MUTED")
+            border = color_for("DIVIDER")
         elif item.enabled:
             checked = True
-            color = QColor(tokens["ACCENT"])
-            border = QColor(tokens["ACCENT"])
+            color = color_for("ACCENT")
+            border = color_for("ACCENT")
         else:
             checked = False
-            color = QColor(tokens["SURFACE"])
-            border = QColor(tokens["BORDER_STRONG"])
+            color = color_for("SURFACE")
+            border = color_for("BORDER_STRONG")
 
         painter.setBrush(color)
         painter.setPen(QPen(border, 1.2))
         painter.drawRoundedRect(box, 3, 3)
 
         if checked:
-            pen = QPen(QColor(tokens["ACCENT_ON"]), 1.9)
+            pen = QPen(color_for("ACCENT_ON"), 1.9)
             pen.setCapStyle(Qt.PenCapStyle.RoundCap)
             pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
             painter.setPen(pen)
@@ -432,40 +442,51 @@ class QueueDelegate(QStyledItemDelegate):
                 int(box.right() - 3.0), int(box.top() + 4.0),
             )
 
-    def _paint_savings(self, painter, rect, item, tokens) -> None:
+    def _paint_savings(self, painter, rect, item) -> None:
         ratio = item.ratio
         text = saved_percent(item.original_size, item.new_size)
-        width = rect.width() - 16
-        bar_width = max(52.0, width - 52.0)
-        bar_height = 7.0
-        bar_left = rect.left() + 8
-        bar_top = rect.center().y() - bar_height / 2 + 1
-
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(tokens["SURFACE_PRESSED"]))
-        painter.drawRoundedRect(QRectF(bar_left, bar_top, bar_width, bar_height), 3.5, 3.5)
-
-        if ratio > 0:
-            filled = max(bar_height, bar_width * ratio)
-            painter.setBrush(QColor(tokens["ACCENT"]))
-            painter.drawRoundedRect(QRectF(bar_left, bar_top, filled, bar_height), 3.5, 3.5)
-
         font = fonts.make_font(size=9, mono=True, weight=fonts.WEIGHT_SEMIBOLD)
         painter.setFont(font)
-        painter.setPen(QColor(tokens["TEXT_STRONG"] if ratio > 0.05 else tokens["TEXT_MUTED"]))
+        metrics = QFontMetrics(font)
+        text_width = metrics.horizontalAdvance(text)
+        pad = 8.0
+        text_rect = QRectF(
+            rect.right() - pad - text_width,
+            rect.top(),
+            text_width,
+            rect.height(),
+        )
+
+        bar_left = rect.left() + pad
+        bar_right = text_rect.left() - 7
+        bar_width = bar_right - bar_left
+        if bar_width >= 28:
+            bar_height = 7.0
+            bar_top = rect.center().y() - bar_height / 2 + 1
+
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(color_for("SURFACE_PRESSED"))
+            painter.drawRoundedRect(QRectF(bar_left, bar_top, bar_width, bar_height), 3.5, 3.5)
+
+            if ratio > 0:
+                filled = max(bar_height, bar_width * ratio)
+                painter.setBrush(color_for("ACCENT"))
+                painter.drawRoundedRect(QRectF(bar_left, bar_top, filled, bar_height), 3.5, 3.5)
+
+        painter.setPen(color_for("TEXT_STRONG" if ratio > 0.05 else "TEXT_MUTED"))
         painter.drawText(
-            QRectF(bar_left + bar_width + 6, rect.top(), rect.width() - bar_width - 10, rect.height()),
+            text_rect,
             int(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter),
             text,
         )
 
-    def _paint_status_pill(self, painter, rect, item, tokens) -> None:
+    def _paint_status_pill(self, painter, rect, item) -> None:
         label, token_name = STATUS_META.get(item.status, (item.status, "TEXT_MUTED"))
-        color = QColor(tokens[token_name])
+        color = color_for(token_name)
         font = fonts.make_font(size=8, weight=fonts.WEIGHT_SEMIBOLD, tracking=0.3)
         painter.setFont(font)
         metrics = QFontMetrics(font)
-        width = metrics.horizontalAdvance(label) + 16
+        width = min(rect.width() - 16, metrics.horizontalAdvance(label) + 16)
         height = 19.0
         pill = QRectF(rect.right() - width - 8, rect.center().y() - height / 2, width, height)
 

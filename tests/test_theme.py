@@ -41,12 +41,12 @@ def test_no_pure_black_or_pure_white_canvas():
 
 def test_canvas_and_surface_match_the_documented_tokens():
     light = theme.tokens_for("light")
-    assert light["BG_APP"] == "#F0F1F3"
+    assert light["BG_APP"] == "#EEF3FA"
     assert light["SURFACE"] == "#FFFFFF"
-    assert light["ACCENT"] == "#D23B16"
+    assert light["ACCENT"] == "#185FA5"
     dark = theme.tokens_for("dark")
-    assert dark["BG_APP"] == "#14161A"
-    assert dark["ACCENT"] == "#FF6A45"
+    assert dark["BG_APP"] == "#0A1426"
+    assert dark["ACCENT"] == "#4A90E2"
 
 
 def test_no_palette_leak_rule_for_qwidget_exists():

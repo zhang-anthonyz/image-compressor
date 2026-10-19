@@ -8,19 +8,23 @@
   cannot express.
 * ``SavingsBar`` — the visual motif of the app: a length that *is* the number.
 * ``HalftoneHeader`` — the one decorative element, drawn from print technique.
+* ``PressSlider`` — the numeric slider is painted by hand so it can carry the
+  print-room identity (thicker track, ticks, a default marker, a value bubble
+  on drag) instead of inheriting Qt's flat gray ribbon.
 """
 from __future__ import annotations
 
 from PySide6.QtCore import (
     QEasingCurve,
     QPoint,
+    QPointF,
     QPropertyAnimation,
     QRectF,
     QSize,
     Qt,
     Signal,
 )
-from PySide6.QtGui import QColor, QFont, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import (
     QComboBox,
     QFrame,
@@ -28,13 +32,16 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QSizePolicy,
+    QSlider,
     QSpinBox,
+    QSplitter,
+    QSplitterHandle,
     QVBoxLayout,
     QWidget,
 )
 
 from . import fonts, icons, theme
-from .theme import tokens_for
+from .theme import color_for, tokens_for
 
 
 # ------------------------------------------------------------------ inputs ---
@@ -50,8 +57,7 @@ class ChevronComboBox(QComboBox):
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        tokens = tokens_for(theme.current_mode())
-        color = QColor(tokens["TEXT_MUTED"] if self.isEnabled() else tokens["TEXT_FAINT"])
+        color = color_for("TEXT_MUTED" if self.isEnabled() else "TEXT_FAINT")
         pen = QPen(color, 1.6)
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
         pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
@@ -72,18 +78,27 @@ class PlusMinusSpinBox(QSpinBox):
 
     The value is drawn in the monospace family so a column of numbers does not
     shift by a pixel as digits change.
+
+    ``setButtonSymbols(NoButtons)`` is deliberately **not** used: together with
+    any stylesheet on ``QSpinBox`` Qt's QStyleSheetStyle collapses the internal
+    line edit to one pixel (measured 74 px wide field -> 1 px edit), which makes
+    the value invisible even though it is still there. The native buttons stay
+    registered (so the edit field keeps its width) but are zero-sized by QSS;
+    the glyphs below are the only affordance the user sees.
     """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._hover: str | None = None
-        self.setButtonSymbols(QSpinBox.ButtonSymbols.NoButtons)
         self.setMouseTracking(True)
         self.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        # The line edit's rect spans the whole field under QSS; keep the text
+        # clear of the painted +/- strip on the right.
+        self.lineEdit().setTextMargins(9, 0, 24, 0)
 
     # -- geometry helpers
     def _strip_rect(self) -> QRectF:
-        return QRectF(self.width() - 20.0, 1.0, 19.0, self.height() - 2.0)
+        return QRectF(self.width() - 21.0, 1.0, 20.0, self.height() - 2.0)
 
     def _half_index(self, position: QPoint) -> str | None:
         if not self._strip_rect().contains(position):
@@ -121,14 +136,13 @@ class PlusMinusSpinBox(QSpinBox):
 
     def paintEvent(self, event):  # noqa: N802
         super().paintEvent(event)
-        tokens = tokens_for(theme.current_mode())
         strip = self._strip_rect()
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
         if self._hover:
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(QColor(tokens["SURFACE_HOVER"]))
+            painter.setBrush(color_for("SURFACE_HOVER"))
             highlight = QRectF(
                 strip.left(), strip.top(), strip.width(), strip.height() / 2
             )
@@ -136,8 +150,8 @@ class PlusMinusSpinBox(QSpinBox):
                 highlight.moveTop(strip.center().y())
             painter.drawRoundedRect(highlight, 3, 3)
 
-        active = QColor(tokens["TEXT_SECONDARY"] if self.isEnabled() else tokens["TEXT_FAINT"])
-        quiet = QColor(tokens["TEXT_MUTED"] if self.isEnabled() else tokens["TEXT_FAINT"])
+        active = color_for("TEXT_SECONDARY" if self.isEnabled() else "TEXT_FAINT")
+        quiet = color_for("TEXT_MUTED" if self.isEnabled() else "TEXT_FAINT")
         center_x = strip.center().x()
         top_y = strip.top() + strip.height() * 0.30
         bottom_y = strip.top() + strip.height() * 0.70
@@ -152,6 +166,289 @@ class PlusMinusSpinBox(QSpinBox):
         painter.setPen(pen)
         painter.drawLine(int(center_x - 3.5), int(bottom_y), int(center_x + 3.5), int(bottom_y))
         painter.end()
+
+
+# ------------------------------------------------------------------ slider ---
+class PressSlider(QSlider):
+    """Numeric slider that paints itself in the print-room idiom.
+
+    Three things distinguish it from a styled QSlider:
+
+    * The value is shown above the handle while the cursor is over the track or
+      the handle is being dragged. The bubble is monospaced and carries the
+      configured suffix (e.g. ``75 %``), so the readout beside the slider does
+      not have to be glanced at mid-drag.
+    * Tick marks at the start, end, and any explicit ``set_tick_values(...)``
+      give the track a scale; the optional ``set_default_value(...)`` draws a
+      hairline + small label marking the recommended position.
+    * The handle grows from 16 to 18 px on hover or drag, so the affordance is
+      never ambiguous and the pressed state is felt as well as seen.
+
+    Keyboard and click-on-track behaviour still come from QSlider — only the
+    painting is custom.
+    """
+
+    _TRACK_HEIGHT = 6
+    _HANDLE_RADIUS = 8  # 16 px diameter at rest
+    _HANDLE_RADIUS_HOVER = 9  # 18 px on hover/press
+    _HANDLE_RING = 2
+    _BUBBLE_PAD_X = 9
+    _BUBBLE_PAD_Y = 4
+    _TICK_HEIGHT = 5
+    _TICK_WIDTH = 1.2
+    _DEFAULT_MARKER_WIDTH = 1.2
+    _AREA_TOP = 14  # vertical space reserved for the value bubble
+
+    def __init__(
+        self,
+        orientation: Qt.Orientation = Qt.Orientation.Horizontal,
+        parent: QWidget | None = None,
+    ) -> None:
+        super().__init__(orientation, parent)
+        self.setMouseTracking(True)
+        self._hover = False
+        self._pressed = False
+        self._default_value: int | None = None
+        self._tick_values: list[int] = []
+        self._suffix: str = ""
+        self.setMinimumHeight(36)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    # -- configuration
+    def set_default_value(self, value: int | None) -> None:
+        self._default_value = value if value is not None else None
+        self.update()
+
+    def set_tick_values(self, values: list[int]) -> None:
+        self._tick_values = sorted({int(v) for v in values})
+        self.update()
+
+    def set_suffix(self, text: str) -> None:
+        self._suffix = text
+        self.update()
+
+    def suffix(self) -> str:
+        return self._suffix
+
+    # -- state tracking
+    def enterEvent(self, event):  # noqa: N802
+        self._hover = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):  # noqa: N802
+        self._hover = False
+        self.update()
+        super().leaveEvent(event)
+
+    def mousePressEvent(self, event):  # noqa: N802
+        if event.button() == Qt.MouseButton.LeftButton and self.isEnabled():
+            self._pressed = True
+            # Hit-test against the same geometry paintEvent uses, so the value
+            # the user sees is the value the click lands on. QSlider's default
+            # sliderValueFromPosition uses a different groove rect (no AREA_TOP
+            # offset, no handle-radius inset) and silently offset clicks near
+            # the track edges — the root cause of "click lands on wrong value".
+            target = self._x_to_value(event.position().x())
+            self.setValue(target)
+            self.update()
+            event.accept()
+            return
+        super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event):  # noqa: N802
+        # Drag-follow: while the left button is held, the handle tracks the
+        # cursor using the same _x_to_value mapping. Without this QSlider
+        # would page-step towards the cursor instead of following it.
+        if self._pressed and event.buttons() & Qt.MouseButton.LeftButton:
+            target = self._x_to_value(event.position().x())
+            self.setValue(target)
+            event.accept()
+            return
+        super().mouseMoveEvent(event)
+
+    def mouseReleaseEvent(self, event):  # noqa: N802
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._pressed = False
+            self.update()
+        super().mouseReleaseEvent(event)
+
+    # -- geometry
+    def _track_rect(self) -> QRectF:
+        h = float(self._TRACK_HEIGHT)
+        cy = self._area_top() + (self.height() - self._area_top()) / 2.0
+        x = self._handle_radius()
+        width = max(2.0 * self._handle_radius(), float(self.width()) - 2.0 * self._handle_radius())
+        return QRectF(x, cy - h / 2.0, width, h)
+
+    def _handle_radius(self) -> float:
+        return float(self._HANDLE_RADIUS_HOVER if (self._hover or self._pressed) else self._HANDLE_RADIUS)
+
+    def _area_top(self) -> float:
+        return float(self._AREA_TOP)
+
+    def _value_to_x(self, value: int) -> float:
+        track = self._track_rect()
+        span = max(1, self.maximum() - self.minimum())
+        return track.left() + (value - self.minimum()) / span * track.width()
+
+    def _x_to_value(self, x: float) -> int:
+        track = self._track_rect()
+        span = max(1, self.maximum() - self.minimum())
+        ratio = max(0.0, min(1.0, (x - track.left()) / max(1.0, track.width())))
+        return int(round(self.minimum() + ratio * span))
+
+    def _bubble_text(self) -> str:
+        value = self.value()
+        text = str(value) + self._suffix
+        return text
+
+    def _show_bubble(self) -> bool:
+        return self.isEnabled() and (self._hover or self._pressed)
+
+    # -- paint
+    def paintEvent(self, event):  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        track = self._track_rect()
+        radius = track.height() / 2.0
+
+        if not self.isEnabled():
+            track_color = color_for("BORDER_STRONG")
+            fill_color = color_for("BORDER_STRONG")
+            ring_color = color_for("NEUTRAL")
+            handle_fill = color_for("SURFACE_MUTED")
+            tick_color = color_for("DIVIDER")
+            default_color = color_for("DIVIDER")
+            bubble_bg = color_for("SURFACE_MUTED")
+            bubble_border = color_for("DIVIDER")
+            bubble_text = color_for("TEXT_FAINT")
+        else:
+            track_color = color_for("SLIDER_TRACK")
+            fill_color = color_for("SLIDER_FILL")
+            ring_color = color_for("SLIDER_HANDLE_RING")
+            handle_fill = color_for("SLIDER_HANDLE")
+            tick_color = color_for("SLIDER_TICK")
+            default_color = color_for("SLIDER_DEFAULT_MARKER")
+            # Fluent: the value bubble uses accent-soft glass instead of an
+            # inverted ink block, so the readout reads as layered surface,
+            # not a chip floating above the track.
+            bubble_bg = color_for("ACCENT_SOFT")
+            bubble_border = color_for("ACCENT_SOFT_BORDER")
+            bubble_text = color_for("ACCENT_SOFT_TEXT")
+
+        # Track
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(track_color)
+        painter.drawRoundedRect(track, radius, radius)
+
+        # Filled portion (from track left to handle)
+        handle_x = self._value_to_x(self.value())
+        if handle_x > track.left():
+            filled = QRectF(track)
+            filled.setRight(handle_x)
+            painter.setBrush(fill_color)
+            painter.drawRoundedRect(filled, radius, radius)
+
+        # Tick marks above the track (start, end, configured ticks)
+        painter.setPen(QPen(tick_color, self._TICK_WIDTH, Qt.PenStyle.SolidLine, Qt.PenCapStyle.FlatCap))
+        tick_y_top = track.top() - self._TICK_HEIGHT - 2
+        tick_y_bot = track.top() - 2
+        ticks = {self.minimum(), self.maximum(), *self._tick_values}
+        for tick_value in ticks:
+            if tick_value < self.minimum() or tick_value > self.maximum():
+                continue
+            x = self._value_to_x(tick_value)
+            painter.drawLine(QPointF(x, tick_y_top), QPointF(x, tick_y_bot))
+
+        # Default marker: a dashed hairline that crosses the tick band and the
+        # track. The dash pattern distinguishes it from the solid tick marks,
+        # which is enough to mark the recommended position without an extra
+        # text label (one would either clip below the widget or crowd the
+        # value bubble).
+        if self._default_value is not None and self.minimum() <= self._default_value <= self.maximum():
+            marker_x = self._value_to_x(self._default_value)
+            band_top = track.top() - self._TICK_HEIGHT - 2
+            band_bot = track.bottom() + 2
+            painter.setPen(QPen(default_color, self._DEFAULT_MARKER_WIDTH, Qt.PenStyle.DashLine, Qt.PenCapStyle.FlatCap))
+            painter.drawLine(QPointF(marker_x, band_top), QPointF(marker_x, band_bot))
+
+        # Handle
+        handle_r = self._handle_radius()
+        handle_rect = QRectF(
+            handle_x - handle_r,
+            track.center().y() - handle_r,
+            handle_r * 2,
+            handle_r * 2,
+        )
+        # Pressed: invert — accent fill, paper ring. Hover only: accent-soft fill.
+        if self._pressed and self.isEnabled():
+            painter.setBrush(color_for("SLIDER_HANDLE_PRESSED"))
+            ring_color = color_for("SLIDER_BUBBLE_TEXT")  # paper ring on accent fill
+        elif self._hover and self.isEnabled():
+            painter.setBrush(color_for("SLIDER_HANDLE_HOVER"))
+        else:
+            painter.setBrush(handle_fill)
+        painter.setPen(QPen(ring_color, self._HANDLE_RING))
+        painter.drawEllipse(handle_rect)
+
+        # Value bubble above the handle, only while hovered or pressed.
+        if self._show_bubble():
+            self._draw_bubble(painter, handle_x, bubble_bg, bubble_border, bubble_text)
+        painter.end()
+
+    def _draw_bubble(
+        self,
+        painter: QPainter,
+        anchor_x: float,
+        bg: QColor,
+        border: QColor,
+        text: QColor,
+    ) -> None:
+        text_str = self._bubble_text()
+        font = QFont(self.font())
+        font.setPointSize(9)
+        font.setWeight(QFont.Weight.DemiBold)
+        metrics = QFontMetrics(font)
+        text_w = metrics.horizontalAdvance(text_str)
+        bubble_w = text_w + 2 * self._BUBBLE_PAD_X
+        bubble_h = metrics.height() + 2 * self._BUBBLE_PAD_Y
+        # Anchor the bubble so its centre sits above the handle, clamped so it
+        # never spills past the widget edges.
+        margin = self._BUBBLE_PAD_X
+        center_x = max(bubble_w / 2 + margin, min(self.width() - bubble_w / 2 - margin, anchor_x))
+        bubble_x = center_x - bubble_w / 2
+        bubble_y = 0.5
+        bubble_rect = QRectF(bubble_x, bubble_y, bubble_w, bubble_h)
+
+        path = QPainterPath()
+        path.addRoundedRect(bubble_rect, 4, 4)
+        # Small triangular tail pointing down at the handle.
+        tail_w = 6.0
+        tail_h = 4.0
+        tail_cx = max(bubble_rect.left() + tail_w, min(bubble_rect.right() - tail_w, anchor_x))
+        tail_top_y = bubble_rect.bottom()
+        path.moveTo(tail_cx - tail_w / 2, tail_top_y)
+        path.lineTo(tail_cx, tail_top_y + tail_h)
+        path.lineTo(tail_cx + tail_w / 2, tail_top_y)
+        path.closeSubpath()
+
+        painter.setPen(QPen(border, 1))
+        painter.setBrush(bg)
+        painter.drawPath(path)
+
+        painter.setPen(text)
+        painter.setFont(font)
+        painter.drawText(bubble_rect, Qt.AlignmentFlag.AlignCenter, text_str)
+
+    # Hint that the bubble area is reserved even when not painted, so layouts
+    # that depend on sizeHint do not jump as the bubble appears.
+    def sizeHint(self) -> QSize:  # noqa: N802
+        hint = super().sizeHint()
+        return QSize(max(160, hint.width()), 36)
+
+    def minimumSizeHint(self) -> QSize:  # noqa: N802
+        return QSize(120, 36)
 
 
 # ------------------------------------------------------------------ labels ---
@@ -186,6 +483,45 @@ class MonoLabel(QLabel):
         self.setFont(font)
 
 
+class ElidedLabel(QLabel):
+    """Single-line label that elides instead of forcing the layout wider.
+
+    Status sentences and preview hints are allowed to be long, but they must
+    never push the controls beside them out of the window. The full sentence is
+    kept as a tooltip whenever it had to be shortened.
+    """
+
+    def __init__(self, text: str = "", parent: QWidget | None = None) -> None:
+        self._full_text = text
+        super().__init__("", parent)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self._apply_elision()
+
+    def setText(self, text: str) -> None:  # noqa: N802 (Qt naming)
+        self._full_text = text
+        self._apply_elision()
+
+    def full_text(self) -> str:
+        return self._full_text
+
+    def resizeEvent(self, event):  # noqa: N802
+        super().resizeEvent(event)
+        self._apply_elision()
+
+    def sizeHint(self) -> QSize:  # noqa: N802
+        # The layout should not reserve the full sentence's width; the stretch
+        # factor decides how much room the row can spare.
+        hint = super().sizeHint()
+        return QSize(min(hint.width(), 260), hint.height())
+
+    def _apply_elision(self) -> None:
+        width = max(0, self.width() - 2)
+        metrics = self.fontMetrics()
+        shown = metrics.elidedText(self._full_text, Qt.TextElideMode.ElideRight, width)
+        super().setText(shown)
+        self.setToolTip(self._full_text if shown != self._full_text else "")
+
+
 class StatLabel(QLabel):
     """Big number used by the result summary."""
 
@@ -202,6 +538,7 @@ def make_card(
     hint: str = "",
     *,
     eyebrow: str = "",
+    header_right: QWidget | None = None,
     parent: QWidget | None = None,
 ) -> tuple[QFrame, QVBoxLayout]:
     """Build a card frame and return ``(card, body_layout)``.
@@ -227,6 +564,8 @@ def make_card(
     title_label.setObjectName("cardTitle")
     title_row.addWidget(title_label)
     title_row.addStretch(1)
+    if header_right is not None:
+        title_row.addWidget(header_right)
     header.addLayout(title_row)
     if hint:
         hint_label = QLabel(hint)
@@ -291,31 +630,31 @@ class SavingsBar(QWidget):
         return QSize(120, self._bar_height)
 
     def paintEvent(self, event):  # noqa: N802
-        tokens = tokens_for(theme.current_mode())
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         radius = self._bar_height / 2.0
         track = QRectF(0, (self.height() - self._bar_height) / 2.0, self.width(), self._bar_height)
 
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(tokens["SURFACE_PRESSED"]))
+        painter.setBrush(color_for("SURFACE_PRESSED"))
         painter.drawRoundedRect(track, radius, radius)
 
         if self._ratio > 0:
             filled = QRectF(track)
             filled.setWidth(max(self._bar_height, track.width() * self._ratio))
-            painter.setBrush(QColor(tokens["ACCENT"] if self._accent else tokens["NEUTRAL"]))
+            painter.setBrush(color_for("ACCENT" if self._accent else "NEUTRAL"))
             painter.drawRoundedRect(filled, radius, radius)
         painter.end()
 
 
 # -------------------------------------------------------------- halftone ---
 class HalftoneHeader(QWidget):
-    """Halftone dot field fading in from the right.
+    """Fluent accent rule — a thin bar fading in from the right.
 
-    Halftone is how print represents continuous tone with dots, which is exactly
-    what an image compressor does with pixels — so it is the one ornament that
-    earns its place rather than being decoration for its own sake.
+    The print-room halftone field is retired in the Fluent direction; in its
+    place sits a single accent rule that anchors a card or section header
+    without competing with content. It is the only decorative ornament left
+    in the chrome.
     """
 
     def __init__(self, parent: QWidget | None = None, *, rows: int = 3, step: int = 9) -> None:
@@ -323,31 +662,34 @@ class HalftoneHeader(QWidget):
         self._rows = rows
         self._step = step
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        self.setMinimumHeight(rows * step)
+        self.setMinimumHeight(max(4, rows * step))
 
     def paintEvent(self, event):  # noqa: N802
-        tokens = tokens_for(theme.current_mode())
-        dot = QColor(
-            *(int(part) for part in tokens["HALFTONE_RGB"].split(",")),
-        )
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setPen(Qt.PenStyle.NoPen)
 
+        # Copy the cached accent so we can mutate alpha without touching the
+        # shared instance other widgets read from colour_for.
+        accent = QColor(color_for("ACCENT"))
         width = self.width()
-        step = self._step
-        for row in range(self._rows):
-            for column in range(0, max(1, width // step) + 1):
-                # Dots grow and darken towards the right: a printed gradient.
-                progress = column / max(1.0, width / step)
-                radius = step * 0.09 + progress * step * 0.20
-                dot.setAlphaF(min(0.42, 0.05 + progress * 0.36))
-                painter.setBrush(dot)
-                painter.drawEllipse(
-                    QRectF(column * step + step / 2 - radius,
-                           row * step + step / 2 - radius,
-                           radius * 2, radius * 2)
-                )
+        height = self.height()
+
+        bar_h = 2.0
+        bar_y = (height - bar_h) / 2.0
+        segments = max(1, width // 6)
+        seg_w = width / segments
+        for i in range(segments):
+            progress = i / max(1, segments - 1)
+            # Fade in towards the right: the bar reads as a closing flourish.
+            alpha_f = 0.05 + (1 - progress) * 0.35
+            c = QColor(accent)
+            c.setAlphaF(alpha_f)
+            painter.setBrush(c)
+            painter.drawRoundedRect(
+                QRectF(i * seg_w, bar_y, seg_w + 0.5, bar_h),
+                bar_h / 2.0, bar_h / 2.0,
+            )
         painter.end()
 
 
@@ -411,6 +753,46 @@ class DropZone(QFrame):
 
 
 # ------------------------------------------------------------- micro parts ---
+class GripSplitter(QSplitter):
+    """Splitter with a visible grip.
+
+    A transparent 10 px gap looks like a plain margin, so users never discover
+    that the queue/preview and workspace/settings proportions can be dragged.
+    The grip is a single short bar: enough to read as a handle, quiet enough for
+    the print-room palette.
+    """
+
+    def createHandle(self):  # noqa: N802 (Qt naming)
+        return GripHandle(self.orientation(), self)
+
+
+class GripHandle(QSplitterHandle):
+    def __init__(self, orientation, parent) -> None:
+        super().__init__(orientation, parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
+        self.setCursor(
+            Qt.CursorShape.SplitHCursor
+            if orientation == Qt.Orientation.Horizontal
+            else Qt.CursorShape.SplitVCursor
+        )
+
+    def paintEvent(self, event):  # noqa: N802
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        if self.underMouse():
+            painter.fillRect(self.rect(), color_for("SURFACE_HOVER"))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(color_for("ACCENT" if self.underMouse() else "TEXT_FAINT"))
+        width = self.width()
+        height = self.height()
+        if self.orientation() == Qt.Orientation.Horizontal:
+            grip = QRectF(width / 2 - 1.5, height / 2 - 9, 3, 18)
+        else:
+            grip = QRectF(width / 2 - 9, height / 2 - 1.5, 18, 3)
+        painter.drawRoundedRect(grip, 1.5, 1.5)
+        painter.end()
+
+
 class IconButton(QPushButton):
     """Square icon-only button."""
 
@@ -530,6 +912,12 @@ class TaskSummary(QFrame):
         self._bar.set_ratio(0.0)
         self._detail.setText("—")
 
+    def show_ready(self, enabled: int) -> None:
+        self._value.setText(str(enabled))
+        self._caption.setText("个文件待压缩")
+        self._bar.set_ratio(0.0)
+        self._detail.setText("压缩设置已就绪")
+
     def show_progress(self, done: int, total: int, saved_bytes: int) -> None:
         self._value.setText(f"{done}/{total}")
         self._caption.setText("正在压缩")
@@ -537,6 +925,12 @@ class TaskSummary(QFrame):
         from ..core.unit_report import human_size
 
         self._detail.setText(f"已省 {human_size(saved_bytes)}" if saved_bytes else "…")
+
+    def show_cancelling(self, done: int, total: int) -> None:
+        self._value.setText(f"{done}/{total}")
+        self._caption.setText("正在取消…")
+        self._bar.set_ratio(done / total if total else 0.0)
+        self._detail.setText("等待当前文件完成")
 
     def show_result(self, total: int, saved_bytes: int, ratio: float, duration_text: str, failures: int) -> None:
         from ..core.unit_report import human_size
