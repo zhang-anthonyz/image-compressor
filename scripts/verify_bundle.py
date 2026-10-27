@@ -33,8 +33,7 @@ MUST_PRESENT_MODULES = [
 MUST_BE_ABSENT = ["torch", "onnxruntime", "onnx", "modelscope", "numpy", "scipy", "pytest"]
 
 EXPECTED_FONTS = {
-    "Archivo-Variable.ttf", "IBMPlexMono-Regular.ttf",
-    "IBMPlexMono-Medium.ttf", "IBMPlexMono-SemiBold.ttf",
+    "DMSans-Variable.ttf", "RobotoMono-Variable.ttf",
 }
 
 

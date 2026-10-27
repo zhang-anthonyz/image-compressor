@@ -148,17 +148,6 @@ def text_ink_region(widget, x0: int, x1: int, threshold: int = 200, above: bool 
     return count
 
 
-def colour_histogram(widget) -> dict[tuple[int, int, int], int]:
-    image = widget.grab().toImage()
-    counts: dict[tuple[int, int, int], int] = {}
-    for y in range(image.height()):
-        for x in range(image.width()):
-            colour = image.pixelColor(x, y)
-            key = (colour.red(), colour.green(), colour.blue())
-            counts[key] = counts.get(key, 0) + 1
-    return counts
-
-
 def is_visible(widget) -> bool:
     """Fully visible, using the real visibility region (not the window rect)."""
     if not widget.isVisible():
@@ -395,17 +384,37 @@ def audit(window: MainWindow, label: str) -> None:
         view.reset_view()
         app.processEvents()
 
-    # 4. palette leak sentinel: Qt's Fusion default fill must appear nowhere
-    sentinel = (239, 239, 239)
+    # 4. palette leak: a label may only paint a colour the theme declares.
+    #    An earlier version of this check counted exact #EFEFEF pixels, which
+    #    worked while the palette had no neutral greys of its own. It cannot
+    #    discriminate any more: #F1F3F4 (badge fill) sits within 6 of that
+    #    sentinel, and anti-aliased glyph edges land on it by chance. The
+    #    semantic version is strictly stronger — *any* undeclared fill fails,
+    #    including the Fusion default the original sentinel was proxying for.
+    declared = {
+        tuple(int(value[i : i + 2], 16) for i in (1, 3, 5))
+        for value in theme.tokens_for(theme.current_mode()).values()
+        if value.startswith("#") and len(value) == 7
+    }
     leaks = 0
     for widget in window.findChildren(QLabel):
         if not is_visible(widget) or widget.width() < 20 or widget.height() < 12:
             continue
-        counts = colour_histogram(widget)
-        leaks += counts.get(sentinel, 0)
-    check(leaks == 0, f"无 #EFEFEF 调色板泄漏（命中 {leaks} 像素）")
+        corner = widget.grab().toImage().pixelColor(2, 2)
+        if corner.alpha() <= 200:
+            continue  # transparent label: nothing painted
+        rgb = (corner.red(), corner.green(), corner.blue())
+        if not any(
+            abs(rgb[0] - d[0]) <= 2 and abs(rgb[1] - d[1]) <= 2 and abs(rgb[2] - d[2]) <= 2
+            for d in declared
+        ):
+            leaks += 1
+            FAILURES.append(
+                f"{label}: 标签 '{widget.text()[:16]}' 填充了未声明的颜色 {corner.name()}"
+            )
+    check(leaks == 0, f"无未声明颜色泄漏（命中 {leaks} 处）")
 
-    # 5. labels are transparent, not painted grey blocks
+    # 5. labels are transparent unless they are a declared badge surface
     grey_blocks = 0
     for candidate in window.findChildren(QLabel):
         if not is_visible(candidate) or candidate.width() < 40 or candidate.height() < 14:
@@ -420,14 +429,10 @@ def audit(window: MainWindow, label: str) -> None:
         # what we reject is a label that painted a solid rectangle of its own.
         if opaque and image.pixelColor(2, 2).alpha() > 200:
             colour = image.pixelColor(2, 2)
-            # All three channels must be near the sentinel: the Fusion default
-            # fill is neutral grey, whereas the Fluent palette's paper (#EEF3FA)
-            # and dark-mode ink (#F0F4FB) both happen to sit within 6 of the
-            # sentinel on red/green while differing by 11-12 on blue.
-            if (
-                abs(colour.red() - sentinel[0]) < 6
-                and abs(colour.green() - sentinel[1]) < 6
-                and abs(colour.blue() - sentinel[2]) < 6
+            rgb = (colour.red(), colour.green(), colour.blue())
+            if not any(
+                abs(rgb[0] - d[0]) <= 2 and abs(rgb[1] - d[1]) <= 2 and abs(rgb[2] - d[2]) <= 2
+                for d in declared
             ):
                 grey_blocks += 1
     check(grey_blocks == 0, f"标签背景透明（异常灰块 {grey_blocks}）")

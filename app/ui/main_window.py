@@ -60,7 +60,6 @@ from .widgets import (
     ElidedLabel,
     GripSplitter,
     IconButton,
-    MicroLabel,
     MonoLabel,
     SegmentedControl,
     Toast,
@@ -153,14 +152,14 @@ class MainWindow(QMainWindow):
     def _build_top_bar(self) -> QFrame:
         bar = QFrame()
         bar.setObjectName("topBar")
-        bar.setFixedHeight(58)
+        bar.setFixedHeight(64)
         layout = QHBoxLayout(bar)
-        layout.setContentsMargins(16, 0, 14, 0)
-        layout.setSpacing(11)
+        layout.setContentsMargins(20, 0, 16, 0)
+        layout.setSpacing(12)
 
         mark = QLabel("PP")
         mark.setObjectName("brandMark")
-        mark.setFixedSize(30, 30)
+        mark.setFixedSize(34, 34)
         mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(mark)
 
@@ -174,6 +173,12 @@ class MainWindow(QMainWindow):
         brand.addWidget(subtitle)
         layout.addLayout(brand)
 
+        layout.addSpacing(6)
+        divider = QFrame()
+        divider.setObjectName("topBarDivider")
+        divider.setFixedWidth(1)
+        divider.setFixedHeight(20)
+        layout.addWidget(divider)
         layout.addSpacing(10)
         self.engine_chip = QLabel(registry.engine_badge())
         self.engine_chip.setObjectName("engineChip")
@@ -181,8 +186,8 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.engine_chip)
         layout.addStretch(1)
 
-        self.theme_button = IconButton("moon", "切换浅色 / 深色主题 (Ctrl+D)")
-        self.info_button = IconButton("info", "关于与格式能力说明")
+        self.theme_button = IconButton("moon", "切换浅色 / 深色主题 (Ctrl+D)", size=40)
+        self.info_button = IconButton("info", "关于与格式能力说明", size=40)
         layout.addWidget(self.theme_button)
         layout.addWidget(self.info_button)
         return bar
@@ -203,38 +208,37 @@ class MainWindow(QMainWindow):
         queue_layout.setSpacing(10)
 
         header = QHBoxLayout()
-        header.setSpacing(8)
-        header.addWidget(MicroLabel("QUEUE"))
+        header.setSpacing(10)
         self.queue_title = QLabel("队列")
         self.queue_title.setObjectName("cardTitle")
         header.addWidget(self.queue_title)
-        header.addStretch(1)
         self.queue_count = MonoLabel("0 个文件")
-        self.queue_count.setObjectName("cardHint")
+        self.queue_count.setObjectName("idleBadge")
         header.addWidget(self.queue_count)
+        header.addStretch(1)
         queue_layout.addLayout(header)
 
         toolbar = QHBoxLayout()
-        toolbar.setSpacing(7)
+        toolbar.setSpacing(8)
         self.add_files_button = QPushButton("添加文件")
         self.add_files_button.setIcon(icons.icon("add-file", theme.tokens_for("light")["TEXT_SECONDARY"], 17))
-        self.add_files_button.setIconSize(QSize(15, 15))
+        self.add_files_button.setIconSize(QSize(16, 16))
         self.add_folder_button = QPushButton("添加文件夹")
         self.add_folder_button.setIcon(icons.icon("folder", theme.tokens_for("light")["TEXT_SECONDARY"], 17))
-        self.add_folder_button.setIconSize(QSize(15, 15))
+        self.add_folder_button.setIconSize(QSize(16, 16))
         self.remove_button = QPushButton("移除选中")
         self.remove_button.setIcon(icons.icon("remove", theme.tokens_for("light")["TEXT_SECONDARY"], 17))
-        self.remove_button.setIconSize(QSize(15, 15))
+        self.remove_button.setIconSize(QSize(16, 16))
         self.clear_button = QPushButton("清空")
         self.clear_button.setObjectName("ghostButton")
         for button in (self.add_files_button, self.add_folder_button, self.remove_button, self.clear_button):
-            button.setMinimumHeight(29)
+            button.setMinimumHeight(32)
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             toolbar.addWidget(button)
         toolbar.addStretch(1)
         self.select_all_button = QPushButton("全部跳过")
         self.select_all_button.setObjectName("ghostButton")
-        self.select_all_button.setMinimumHeight(29)
+        self.select_all_button.setMinimumHeight(32)
         self.select_all_button.setCursor(Qt.CursorShape.PointingHandCursor)
         toolbar.addWidget(self.select_all_button)
         queue_layout.addLayout(toolbar)
@@ -811,10 +815,12 @@ class MainWindow(QMainWindow):
             text += " · 已取消"
         self.status_text.setText(text)
         saved = int(stats.get("saved", 0))
-        self.status_saved.setText(human_size(saved) if saved else "—")
+        # Three bare dashes in a row are unreadable: each value says what it
+        # is, and says nothing at all when there is nothing to report.
+        self.status_saved.setText(f"已省 {human_size(saved)}" if saved else "已省 —")
         ratio = float(stats.get("ratio", 0.0))
-        self.status_ratio.setText(f"−{ratio * 100:.1f}%" if saved else "—")
-        self.status_engine.setText(f"{stats.get('processed', 0)}/{stats.get('enabled', 0)}")
+        self.status_ratio.setText(f"−{ratio * 100:.1f}%" if saved else "占比 —")
+        self.status_engine.setText(f"完成 {stats.get('processed', 0)}/{stats.get('enabled', 0)}")
 
     def _sync_bottom_stack(self) -> None:
         preview_mode = self.bottom_switch.value() == "preview"

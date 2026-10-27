@@ -25,13 +25,13 @@ def qt_app():
 
 def test_bundled_fonts_register(qt_app):
     registered = fonts.load_bundled_fonts()
-    assert "Archivo" in registered, "Archivo 未随包生效"
-    assert "IBM Plex Mono" in registered, "IBM Plex Mono 未随包生效"
+    assert "DM Sans" in registered, "DM Sans 未随包生效"
+    assert "Roboto Mono" in registered, "Roboto Mono 未随包生效"
 
 
 def test_variable_font_exposes_multiple_weights(qt_app):
-    styles = fonts.load_bundled_fonts()["Archivo"]
-    assert len(styles) >= 4, f"Archivo 变量字体只解析出 {styles}"
+    styles = fonts.load_bundled_fonts()["DM Sans"]
+    assert len(styles) >= 4, f"DM Sans 变量字体只解析出 {styles}"
 
 
 def test_display_and_mono_resolve_to_the_bundled_families(qt_app):
@@ -74,9 +74,9 @@ def test_tracking_is_applied_as_absolute_spacing(qt_app):
 
 
 def test_qss_family_stacks_are_quoted_lists(qt_app):
-    assert fonts.display_stack().startswith('"Archivo"')
+    assert fonts.display_stack().startswith('"DM Sans"')
     assert '"Microsoft YaHei UI"' in fonts.display_stack()
-    assert fonts.mono_stack().startswith('"IBM Plex Mono"')
+    assert fonts.mono_stack().startswith('"Roboto Mono"')
 
 
 def test_font_report_flags_bundled_usage(qt_app):

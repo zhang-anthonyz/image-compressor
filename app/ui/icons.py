@@ -10,9 +10,9 @@ from __future__ import annotations
 import math
 
 from PySide6.QtCore import QPointF, QRectF, Qt
-from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPen, QPixmap, QPolygonF
 
-STROKE = 1.7
+STROKE = 1.8
 
 
 def _canvas(size: int) -> tuple[QPixmap, QPainter]:
@@ -161,6 +161,28 @@ def _draw(name: str, size: int, color: str) -> QPixmap:
         painter.drawRoundedRect(QRectF(s * 0.14, s * 0.34, s * 0.72, s * 0.42), 2.5, 2.5)
         painter.drawLine(QPointF(s * 0.14, s * 0.34), QPointF(s * 0.34, s * 0.22))
         painter.drawLine(QPointF(s * 0.34, s * 0.22), QPointF(s * 0.86, s * 0.22))
+    elif name == "upload":
+        # Material "upload" glyph: a tray with an arrow rising out of it.
+        painter.drawLine(QPointF(m, s * 0.20), QPointF(m, s * 0.56))
+        painter.drawPolyline(
+            QPolygonF(
+                [
+                    QPointF(s * 0.36, s * 0.42),
+                    QPointF(m, s * 0.18),
+                    QPointF(s * 0.64, s * 0.42),
+                ]
+            )
+        )
+        painter.drawPolyline(
+            QPolygonF(
+                [
+                    QPointF(s * 0.18, s * 0.66),
+                    QPointF(s * 0.18, s * 0.80),
+                    QPointF(s * 0.82, s * 0.80),
+                    QPointF(s * 0.82, s * 0.66),
+                ]
+            )
+        )
     else:
         painter.drawEllipse(QPointF(m, m), s * 0.30, s * 0.30)
 

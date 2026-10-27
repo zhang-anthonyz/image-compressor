@@ -15,7 +15,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QPoint, QPointF, QRectF, QSize, Qt, Signal
-from PySide6.QtGui import QBrush, QColor, QImage, QPainter, QPen, QPixmap
+from PySide6.QtGui import QBrush, QColor, QImage, QPainter, QPainterPath, QPen, QPixmap
 from PySide6.QtWidgets import (
     QAbstractScrollArea,
     QFrame,
@@ -404,24 +404,43 @@ class CompareView(QAbstractScrollArea):
         painter.end()
 
     def _paint_seam(self, painter: QPainter, canvas: QRectF, seam: float) -> None:
-        accent = color_for("ACCENT")
-        pen = QPen(accent, 1.4)
-        painter.setPen(pen)
+        """The comparison seam: a light divider with a round grab handle.
+
+        Google Photos / Squoosh draw the seam as a pale line over the image
+        with a white disc on it — the handle has to read as *above* the
+        picture, so it is drawn with a soft shadow rather than a filled bar.
+        """
+        # Divider: a translucent white line stays visible over both a light
+        # and a dark photo without recolouring the image underneath it.
+        divider = QPen(QColor(255, 255, 255, 200), 2.0)
+        painter.setPen(divider)
         painter.drawLine(QPointF(seam, canvas.top()), QPointF(seam, canvas.bottom()))
 
-        handle = QRectF(seam - 11, canvas.center().y() - 16, 22, 32)
-        painter.setBrush(accent)
+        radius = 15.0
+        centre = QPointF(seam, canvas.center().y())
+        # Shadow, then the disc: a soft drop shadow is what lifts the handle
+        # off the photo instead of letting it blend into the pixels.
+        shadow = QColor(0, 0, 0, 60)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(handle, 5, 5)
+        painter.setBrush(shadow)
+        painter.drawEllipse(centre, radius + 1.0, radius + 1.0)
 
-        glyph = QPen(color_for("ACCENT_ON"), 1.4)
-        glyph.setCapStyle(Qt.PenCapStyle.RoundCap)
-        painter.setPen(glyph)
-        for offset in (-5.0, 3.0):
-            painter.drawLine(
-                QPointF(handle.center().x() + offset, handle.center().y() - 5),
-                QPointF(handle.center().x() + offset, handle.center().y() + 5),
-            )
+        painter.setBrush(QColor(255, 255, 255, 235))
+        painter.drawEllipse(centre, radius, radius)
+
+        # Chevrons pointing outwards: the whole point of the handle is that
+        # it can be dragged, so the affordance must show the direction.
+        arrow = QPen(QColor(60, 64, 67), 1.8)
+        arrow.setCapStyle(Qt.PenCapStyle.RoundCap)
+        arrow.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(arrow)
+        for direction in (-1.0, 1.0):
+            x = centre.x() + direction * 4.0
+            path = QPainterPath()
+            path.moveTo(x - direction * 2.0, centre.y() - 4.5)
+            path.lineTo(x + direction * 2.0, centre.y())
+            path.lineTo(x - direction * 2.0, centre.y() + 4.5)
+            painter.drawPath(path)
 
     def _paint_captions(self, painter: QPainter, canvas: QRectF) -> None:
         if self._after is not None:
@@ -458,19 +477,20 @@ class CompareView(QAbstractScrollArea):
         font = fonts.make_font(size=9, weight=fonts.WEIGHT_SEMIBOLD)
         metrics = QFontMetrics(font)
         text_w = metrics.horizontalAdvance(text)
-        width = text_w + 16
-        height = 21
+        width = text_w + 18
+        height = 24
         chip = QPixmap(width, height)
         chip.fill(Qt.GlobalColor.transparent)
         cpainter = QPainter(chip)
         cpainter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         cpainter.setFont(font)
-        background = QColor(color_for("TEXT_STRONG", mode))
-        background.setAlpha(215)
+        # Material's scrim: a translucent black pill that reads over any photo
+        # without picking up its colour.
+        background = QColor(0, 0, 0, 170)
         cpainter.setBrush(background)
         cpainter.setPen(Qt.PenStyle.NoPen)
-        cpainter.drawRoundedRect(QRectF(0, 0, width, height), 4, 4)
-        cpainter.setPen(color_for("SURFACE", mode))
+        cpainter.drawRoundedRect(QRectF(0, 0, width, height), 12, 12)
+        cpainter.setPen(QColor(255, 255, 255))
         cpainter.drawText(QRectF(0, 0, width, height), int(Qt.AlignmentFlag.AlignCenter), text)
         cpainter.end()
         self._caption_cache[key] = chip

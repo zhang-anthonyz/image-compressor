@@ -227,8 +227,10 @@ def summary_line(stats: dict, *, running: bool = False, cancelling: bool = False
 QUEUE_NAME_MIN_WIDTH = 180
 
 #: The settings rail scales with the window but stays within a readable band.
-#: 336 is the measured minimum: the settings card itself needs 318 px, plus the
-#: scrollbar gutter, before its right edge would be clipped (see ui_preview).
+#: 336 is the measured minimum: the settings card itself needs 300 px, plus
+#: card padding and the scrollbar gutter, before its right edge would be
+#: clipped (see ui_preview). The Material chips are narrower than the old
+#: segmented buttons, so the panel fits with room to spare.
 RAIL_MIN_WIDTH = 336
 RAIL_MAX_WIDTH = 456
 

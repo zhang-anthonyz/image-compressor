@@ -2,7 +2,7 @@
 
 一个本机离线运行的图片压缩工具：多格式、可批量、无损与有损双模、按百分比等比缩放，界面按专业工具规格制作。打包为免安装 exe，不联网、不上传。
 
-![主界面](benchmarks/ui/fluent_03_done_1280x820.png)
+![主界面](benchmarks/ui/m3real_03_done_1280x820.png)
 
 ---
 
@@ -97,7 +97,7 @@ python scripts/verify_bundle.py                  # 需先打包（读 build/ 下
 
 ## 设计说明
 
-界面方向为「Fluent 工具」：冷调蓝灰亚克力画布、深墨蓝文字、单一蓝紫信号色，层叠卡片与圆角作为基本视觉语汇——它是 Windows 11 的原生设计语言，让工具读起来像系统的一部分而不是外来样式。数值全部使用等宽字体以便扫读，节省量用条形图表达长度而非数字。
+界面方向为「Google 工具」：Material 3 的视觉语汇——Google 蓝 `#0B57D0` 作单一信号色、中性灰白画布 `#F8F9FA`、16px 圆角卡片、胶囊按钮与筛选芯片、色调化状态标签。字号阶梯与控件密度对齐 Google 自家桌面工具的观感：顶栏只留品牌与操作，诊断信息降级为纯文字；数值全部使用等宽字体以便扫读，节省量用条形图表达长度而非数字。
 
 交互性能上，所有自绘组件（滑杆、队列行、预览对比）的颜色都走 `theme.color_for` 的模块级缓存（主题切换才失效），预览的字幕角标烘焙为位图缓存，主题切换只对顶层窗口做 unpolish/polish——这三层是拖动对比中缝与切换主题不再卡顿的原因。
 
@@ -109,7 +109,7 @@ python scripts/verify_bundle.py                  # 需先打包（读 build/ 下
 2. **AVIF 无无损模式**：Pillow 12 未暴露 libavif 的 lossless，界面禁用该组合。
 3. **动图跳过**：GIF/WebP 多帧不重编码，队列中标注原因后跳过。
 4. **HEIC 仅读不写**：写回 HEIC 涉及额外授权考量，输出侧自动落到可写格式。
-5. **中文依赖系统字体**：界面用随包 Archivo + IBM Plex Mono，中文走系统微软雅黑 UI（不打包 CJK 字体以省 10+ MB）。
+5. **中文依赖系统字体**：界面用随包 DM Sans + Roboto Mono，中文走系统微软雅黑 UI（不打包 CJK 字体以省 10+ MB）。
 6. **PNG 有损只能做调色板量化**：最多 256 色，平滑的照片仍可能出现轻微色带；带透明通道的 PNG 会保留完整 alpha。照片的有损压缩优先选 WebP/JPEG，界面在 PNG 有损模式下也会给出该提示。
 
 ## 许可
@@ -117,5 +117,5 @@ python scripts/verify_bundle.py                  # 需先打包（读 build/ 下
 代码为本项目自有。随包分发的第三方组件及其许可：
 
 - **oxipng** — MIT
-- **Archivo**、**IBM Plex Mono** — SIL Open Font License 1.1（许可原文见 `app/assets/fonts/LICENSE-*.txt`）
+- **DM Sans**、**Roboto Mono** — SIL Open Font License 1.1（许可原文见 `app/assets/fonts/LICENSE-*.txt`）
 - **Pillow** — MIT-CMU；**pillow-heif / libheif** — BSD-3；**PySide6 / Qt** — LGPL-3

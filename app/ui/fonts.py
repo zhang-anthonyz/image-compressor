@@ -1,7 +1,9 @@
 """Bundled font registration and family resolution.
 
-The app ships Archivo (variable, nine named instances) and IBM Plex Mono, both
-OFL-1.1. Chinese text is left to the system's Microsoft YaHei UI — bundling a CJK
+The app ships DM Sans (variable) and Roboto Mono, both OFL-1.1 — the closest
+open relatives of Google's own UI faces (Google Sans / Product Sans and
+Roboto Mono), which is what carries the Material identity in typography.
+Chinese text is left to the system's Microsoft YaHei UI — bundling a CJK
 font would add 10+ MB for glyphs Windows already has.
 
 Every resolution goes through this module so a missing font degrades to a
@@ -13,8 +15,8 @@ from PySide6.QtGui import QFont, QFontDatabase
 
 from ..core.paths import fonts_dir
 
-DISPLAY_FAMILY = "Archivo"
-MONO_FAMILY = "IBM Plex Mono"
+DISPLAY_FAMILY = "DM Sans"
+MONO_FAMILY = "Roboto Mono"
 
 #: Appended to every family string so Qt resolves CJK glyphs by itself.
 CJK_STACK = ("Microsoft YaHei UI", "Microsoft YaHei", "Noto Sans SC", "SimSun")

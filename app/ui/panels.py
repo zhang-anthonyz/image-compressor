@@ -83,7 +83,6 @@ class SettingsPanel(QFrame):
         card, body = make_card(
             "压缩设置",
             "改动立即生效；正在压缩时，调整会在下一批应用。",
-            eyebrow="SETTINGS",
             parent=self,
         )
         outer.addWidget(card)
@@ -562,7 +561,7 @@ class TaskPanel(QFrame):
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
-        card, body = make_card("任务", eyebrow="RUN", header_right=self.state_badge, parent=self)
+        card, body = make_card("任务", header_right=self.state_badge, parent=self)
         outer.addWidget(card)
 
         self.summary = TaskSummary()
@@ -621,6 +620,11 @@ class TaskPanel(QFrame):
     def _set_progress_state(self, state: str) -> None:
         self.progress.setProperty("state", state)
         self._repolish(self.progress)
+        # The savings bar and the progress bar describe the same row, so only
+        # one of them is on screen at a time: the progress bar while the
+        # batch runs, the savings bar once it has an outcome to report.
+        self.summary.set_show_bar(state not in ("running", "cancelling"))
+        self.progress.setVisible(state in ("running", "cancelling"))
 
     def _terminal(self) -> bool:
         return self._state in (self.STATE_DONE, self.STATE_CANCELLED)

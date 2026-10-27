@@ -1,9 +1,10 @@
-"""Fluent — the PixelPress design system: tokens, stylesheet, palette.
+"""Material — the PixelPress design system: tokens, stylesheet, palette.
 
-The identity is "Fluent tool": layered acrylic surfaces, deep blue-purple
-accent, ink-on-paper text contrast, with cards and chips as the only
-decorative motif. Born on Windows 11, the visual language blends with the
-host system so the app reads as a native tool, not a styled overlay.
+The identity is "Google tool": a neutral canvas, one blue accent, tonal
+surfaces, generous radii and a single type family with tabular numerals for
+every measurement. The vocabulary is Material 3, not a skeuomorphic theme:
+filled / tonal / outlined / text buttons, filter chips, 16 px cards, 8 px
+fields, hairline dividers, tonal status chips.
 
 Two rules earned the hard way and enforced here:
 
@@ -28,92 +29,98 @@ from __future__ import annotations
 from string import Template
 
 # ------------------------------------------------------------------ LIGHT ---
-#: Cool blue-grey acrylic, deliberately not warm: a warm cast interferes with
-#: judging the colour of the image being compressed.
-BG_APP = "#EEF3FA"
+#: Google's neutral canvas. A faint warm-grey reads as "paper" without the
+#: cold cast a blue canvas puts on the very images this tool is judging.
+BG_APP = "#F8F9FA"
 SURFACE = "#FFFFFF"
-SURFACE_MUTED = "#E6EEF8"
-SURFACE_HOVER = "#D9E5F4"
-SURFACE_PRESSED = "#C5D6EE"
-SURFACE_SUNK = "#F2F6FB"
-BORDER = "#C8D6E6"
-BORDER_STRONG = "#9DB3D0"
-DIVIDER = "#D9E2EF"
+SURFACE_MUTED = "#F1F3F4"
+SURFACE_HOVER = "#E8EAED"
+SURFACE_PRESSED = "#DADCE0"
+SURFACE_SUNK = "#F1F3F4"
+BORDER = "#DADCE0"
+BORDER_STRONG = "#BDC1C6"
+DIVIDER = "#E8EAED"
 
-TEXT = "#1E2A3D"
-TEXT_STRONG = "#0C1A2E"
-TEXT_SECONDARY = "#3B4D6B"
-TEXT_MUTED = "#6B7B95"
-TEXT_FAINT = "#99A6BC"
+TEXT = "#3C4043"
+TEXT_STRONG = "#202124"
+TEXT_SECONDARY = "#5F6368"
+TEXT_MUTED = "#80868B"
+TEXT_FAINT = "#9AA0A6"
 
-#: Blue-purple — the signal accent of a Fluent tool. Single accent, used for
-#: action, selection and the savings bar; never as decoration.
-ACCENT = "#185FA5"
-ACCENT_HOVER = "#0C447C"
-ACCENT_PRESSED = "#042C53"
-ACCENT_SOFT = "#E6F1FB"
-ACCENT_SOFT_BORDER = "#85B7EB"
-ACCENT_SOFT_TEXT = "#0C447C"
-ACCENT_DISABLED = "#9DB3D0"
+#: Google Blue, M3 primary. The single accent: action, selection, progress.
+ACCENT = "#0B57D0"
+ACCENT_HOVER = "#0842A0"
+ACCENT_PRESSED = "#062E6F"
+ACCENT_SOFT = "#D3E3FD"
+ACCENT_SOFT_BORDER = "#A8C7FA"
+ACCENT_SOFT_TEXT = "#041E49"
+ACCENT_DISABLED = "#A8C7FA"
 #: Text drawn *on* the accent.
 ACCENT_ON = "#FFFFFF"
 
-SUCCESS = "#0F6E56"
-SUCCESS_SOFT = "#E1F5EE"
-WARNING = "#854F0B"
-WARNING_SOFT = "#FAEEDA"
-DANGER = "#C83838"
-DANGER_SOFT = "#FCEBEB"
-DANGER_SOFT_BORDER = "#F09595"
-NEUTRAL = "#5F5E5A"
-NEUTRAL_SOFT = "#F1EFE8"
+SUCCESS = "#137333"
+SUCCESS_SOFT = "#E6F4EA"
+WARNING = "#B06000"
+WARNING_SOFT = "#FEF7E0"
+DANGER = "#C5221F"
+DANGER_SOFT = "#FCE8E6"
+DANGER_SOFT_BORDER = "#F6AEA9"
+NEUTRAL = "#5F6368"
+NEUTRAL_SOFT = "#F1F3F4"
+
+#: Snackbar: inverse surface, so a toast reads as a notification floating
+#: above the app rather than another panel.
+SNACKBAR_BG = "#202124"
+SNACKBAR_TEXT = "#F1F3F4"
 
 #: Layer / grid tints (kept for backward compatibility with widgets that
-#: still reference them; halftone decoration is retired in Fluent direction).
-HALFTONE_RGB = "24, 95, 165"
-GRID_RGB = "157, 179, 208"
+#: still reference them; the halftone decoration is retired).
+HALFTONE_RGB = "154, 160, 166"
+GRID_RGB = "189, 193, 198"
 
 # ------------------------------------------------------------------- DARK ---
-#: Deep blue-charcoal, not pure black: pure #000000 eats the anti-aliasing of
-#: 1px strokes and makes the accent glare.
-DARK_BG_APP = "#0A1426"
-DARK_SURFACE = "#131F36"
-DARK_SURFACE_MUTED = "#1A2742"
-DARK_SURFACE_HOVER = "#21314F"
-DARK_SURFACE_PRESSED = "#2A3D5E"
-DARK_SURFACE_SUNK = "#0F1A2E"
-DARK_BORDER = "#2A3D5E"
-DARK_BORDER_STRONG = "#3D5478"
-DARK_DIVIDER = "#1A2742"
+#: Near-black but never pure: #000000 eats the anti-aliasing of 1 px strokes.
+DARK_BG_APP = "#131314"
+DARK_SURFACE = "#1E1F20"
+DARK_SURFACE_MUTED = "#282A2C"
+DARK_SURFACE_HOVER = "#303134"
+DARK_SURFACE_PRESSED = "#3C4043"
+DARK_SURFACE_SUNK = "#282A2C"
+DARK_BORDER = "#3C4043"
+DARK_BORDER_STRONG = "#5F6368"
+DARK_DIVIDER = "#282A2C"
 
-DARK_TEXT = "#D9E2F2"
-DARK_TEXT_STRONG = "#F0F4FB"
-DARK_TEXT_SECONDARY = "#B5C3D9"
-DARK_TEXT_MUTED = "#8A9BB5"
-DARK_TEXT_FAINT = "#5A6B85"
+DARK_TEXT = "#E3E3E3"
+DARK_TEXT_STRONG = "#E8EAED"
+DARK_TEXT_SECONDARY = "#BDC1C6"
+DARK_TEXT_MUTED = "#9AA0A6"
+DARK_TEXT_FAINT = "#80868B"
 
-#: Brightened blue-purple so it reads on charcoal; text flips to deep ink.
-DARK_ACCENT = "#4A90E2"
-DARK_ACCENT_HOVER = "#6BA5E8"
-DARK_ACCENT_PRESSED = "#378ADD"
-DARK_ACCENT_SOFT = "#1A2742"
-DARK_ACCENT_SOFT_BORDER = "#3D5478"
-DARK_ACCENT_SOFT_TEXT = "#B5C3D9"
-DARK_ACCENT_DISABLED = "#2A3D5E"
-DARK_ACCENT_ON = "#0A1426"
+#: M3 dark primary is a light blue; ink on it is deep, not white.
+DARK_ACCENT = "#A8C7FA"
+DARK_ACCENT_HOVER = "#D3E3FD"
+DARK_ACCENT_PRESSED = "#A8C7FA"
+DARK_ACCENT_SOFT = "#0D3C75"
+DARK_ACCENT_SOFT_BORDER = "#1E5FA8"
+DARK_ACCENT_SOFT_TEXT = "#D3E3FD"
+DARK_ACCENT_DISABLED = "#3C4043"
+DARK_ACCENT_ON = "#062E6F"
 
-DARK_SUCCESS = "#5DCAA5"
-DARK_SUCCESS_SOFT = "#0C2A1F"
-DARK_WARNING = "#FAC775"
-DARK_WARNING_SOFT = "#2A2312"
-DARK_DANGER = "#F09595"
-DARK_DANGER_SOFT = "#2A1719"
-DARK_DANGER_SOFT_BORDER = "#7F3A3A"
-DARK_NEUTRAL = "#5A6B85"
-DARK_NEUTRAL_SOFT = "#1A2742"
+DARK_SUCCESS = "#81C995"
+DARK_SUCCESS_SOFT = "#0E3B22"
+DARK_WARNING = "#FAD17C"
+DARK_WARNING_SOFT = "#3B2F12"
+DARK_DANGER = "#F28B82"
+DARK_DANGER_SOFT = "#5C1A17"
+DARK_DANGER_SOFT_BORDER = "#8C1D18"
+DARK_NEUTRAL = "#9AA0A6"
+DARK_NEUTRAL_SOFT = "#282A2C"
 
-DARK_HALFTONE_RGB = "150, 158, 168"
-DARK_GRID_RGB = "61, 84, 120"
+DARK_SNACKBAR_BG = "#E3E3E3"
+DARK_SNACKBAR_TEXT = "#202124"
+
+DARK_HALFTONE_RGB = "154, 160, 166"
+DARK_GRID_RGB = "95, 99, 104"
 
 #: Per-level log colours, tuned for the surface each is read on (all >= AA).
 LOG_LEVEL_COLORS = {
@@ -142,19 +149,20 @@ LIGHT_TOKENS: dict[str, str] = {
     "SUCCESS": SUCCESS, "SUCCESS_SOFT": SUCCESS_SOFT, "WARNING": WARNING,
     "WARNING_SOFT": WARNING_SOFT, "DANGER": DANGER, "DANGER_SOFT": DANGER_SOFT,
     "DANGER_SOFT_BORDER": DANGER_SOFT_BORDER, "NEUTRAL": NEUTRAL,
-    "NEUTRAL_SOFT": NEUTRAL_SOFT,
+    "NEUTRAL_SOFT": NEUTRAL_SOFT, "SNACKBAR_BG": SNACKBAR_BG,
+    "SNACKBAR_TEXT": SNACKBAR_TEXT,
     "HALFTONE_RGB": HALFTONE_RGB, "GRID_RGB": GRID_RGB,
-    "SLIDER_TRACK": SURFACE_PRESSED,
+    "SLIDER_TRACK": "#E8EAED",
     "SLIDER_FILL": ACCENT,
-    "SLIDER_HANDLE": SURFACE,
-    "SLIDER_HANDLE_RING": ACCENT,
-    "SLIDER_HANDLE_HOVER": ACCENT_SOFT,
-    "SLIDER_HANDLE_PRESSED": ACCENT,
+    "SLIDER_HANDLE": ACCENT,
+    "SLIDER_HANDLE_RING": SURFACE,
+    "SLIDER_HANDLE_HOVER": ACCENT_HOVER,
+    "SLIDER_HANDLE_PRESSED": ACCENT_PRESSED,
     "SLIDER_TICK": TEXT_FAINT,
     "SLIDER_TICK_ACTIVE": TEXT_MUTED,
     "SLIDER_DEFAULT_MARKER": TEXT_MUTED,
     "SLIDER_BUBBLE_BG": TEXT_STRONG,
-    "SLIDER_BUBBLE_BORDER": BORDER_STRONG,
+    "SLIDER_BUBBLE_BORDER": TEXT_STRONG,
     "SLIDER_BUBBLE_TEXT": SURFACE,
 }
 
@@ -172,27 +180,28 @@ DARK_TOKENS: dict[str, str] = {
     "SUCCESS": DARK_SUCCESS, "SUCCESS_SOFT": DARK_SUCCESS_SOFT, "WARNING": DARK_WARNING,
     "WARNING_SOFT": DARK_WARNING_SOFT, "DANGER": DARK_DANGER, "DANGER_SOFT": DARK_DANGER_SOFT,
     "DANGER_SOFT_BORDER": DARK_DANGER_SOFT_BORDER, "NEUTRAL": DARK_NEUTRAL,
-    "NEUTRAL_SOFT": DARK_NEUTRAL_SOFT,
+    "NEUTRAL_SOFT": DARK_NEUTRAL_SOFT, "SNACKBAR_BG": DARK_SNACKBAR_BG,
+    "SNACKBAR_TEXT": DARK_SNACKBAR_TEXT,
     "HALFTONE_RGB": DARK_HALFTONE_RGB, "GRID_RGB": DARK_GRID_RGB,
-    "SLIDER_TRACK": DARK_SURFACE_PRESSED,
+    "SLIDER_TRACK": "#3C4043",
     "SLIDER_FILL": DARK_ACCENT,
-    "SLIDER_HANDLE": DARK_SURFACE,
-    "SLIDER_HANDLE_RING": DARK_ACCENT,
-    "SLIDER_HANDLE_HOVER": DARK_ACCENT_SOFT,
-    "SLIDER_HANDLE_PRESSED": DARK_ACCENT,
+    "SLIDER_HANDLE": DARK_ACCENT,
+    "SLIDER_HANDLE_RING": DARK_SURFACE,
+    "SLIDER_HANDLE_HOVER": DARK_ACCENT_HOVER,
+    "SLIDER_HANDLE_PRESSED": DARK_ACCENT_PRESSED,
     "SLIDER_TICK": DARK_TEXT_FAINT,
     "SLIDER_TICK_ACTIVE": DARK_TEXT_MUTED,
     "SLIDER_DEFAULT_MARKER": DARK_TEXT_MUTED,
     "SLIDER_BUBBLE_BG": DARK_TEXT_STRONG,
-    "SLIDER_BUBBLE_BORDER": DARK_BORDER_STRONG,
-    "SLIDER_BUBBLE_TEXT": DARK_SURFACE,
+    "SLIDER_BUBBLE_BORDER": DARK_TEXT_STRONG,
+    "SLIDER_BUBBLE_TEXT": DARK_BG_APP,
 }
 
-#: Sizes and radii, also used by widgets that paint themselves.
-#: Fluent favours slightly larger radii for layered card surfaces.
-RADIUS_INPUT = 6
-RADIUS_CARD = 12
-RADIUS_CHIP = 6
+#: Sizes and radii. Material uses 8 px for fields, 16 px for cards and a
+#: fully rounded pill for buttons.
+RADIUS_INPUT = 8
+RADIUS_CARD = 16
+RADIUS_CHIP = 16
 
 _STYLESHEET = Template(
     r"""
@@ -220,9 +229,9 @@ QMessageBox QPushButton {
 QToolTip {
     background-color: $TEXT_STRONG;
     color: $SURFACE;
-    border: 1px solid $BORDER_STRONG;
-    border-radius: 4px;
-    padding: 5px 9px;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 10px;
     font-size: 12px;
 }
 
@@ -236,70 +245,81 @@ QFrame#topBar {
 QLabel#brandMark {
     background-color: $ACCENT;
     color: $ACCENT_ON;
-    border-radius: 6px;
+    border-radius: 9px;
     font-size: 14px;
-    font-weight: 800;
+    font-weight: 700;
 }
 
 QLabel#brandTitle {
     color: $TEXT_STRONG;
-    font-size: 15px;
-    font-weight: 700;
+    font-size: 19px;
+    font-weight: 600;
 }
 
 QLabel#brandSubtitle {
     color: $TEXT_MUTED;
-    font-size: 11px;
+    font-size: 12px;
 }
 
 QLabel#engineChip {
-    background-color: $SURFACE_MUTED;
-    border: 1px solid $BORDER;
-    border-radius: 4px;
-    padding: 5px 9px;
-    color: $TEXT_SECONDARY;
+    background-color: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 2px 0;
+    color: $TEXT_MUTED;
     font-size: 11px;
+}
+
+/* Hairline separator between the brand block and the engine readout. */
+QFrame#topBarDivider {
+    background-color: $BORDER;
+    border: none;
+    max-width: 1px;
+    min-width: 1px;
 }
 
 QPushButton#iconButton {
     background-color: transparent;
     border: 1px solid transparent;
-    border-radius: 6px;
+    border-radius: 20px;
     padding: 0;
 }
 QPushButton#iconButton:hover {
     background-color: $SURFACE_HOVER;
-    border-color: $BORDER;
+    border-color: transparent;
+}
+QPushButton#iconButton:pressed {
+    background-color: $SURFACE_PRESSED;
 }
 QPushButton#iconButton:checked {
     background-color: $ACCENT_SOFT;
-    border-color: $ACCENT_SOFT_BORDER;
+    border-color: transparent;
 }
 
 /* =============================== cards =========================== */
 QFrame#card {
     background-color: $SURFACE;
     border: 1px solid $BORDER;
-    border-radius: 12px;
+    border-radius: 16px;
 }
 
 QLabel#cardEyebrow {
-    color: $ACCENT;
-    font-size: 10px;
-    font-weight: 700;
+    color: $TEXT_MUTED;
+    font-size: 12px;
+    font-weight: 500;
     background: transparent;
 }
 
 QLabel#cardTitle {
     color: $TEXT_STRONG;
-    font-size: 15px;
-    font-weight: 700;
+    font-size: 16px;
+    font-weight: 600;
     background: transparent;
 }
 
 QLabel#cardHint {
     color: $TEXT_MUTED;
-    font-size: 11px;
+    font-size: 12px;
     background: transparent;
 }
 
@@ -317,9 +337,10 @@ QFrame#headerRule {
 QPushButton {
     background-color: $SURFACE;
     border: 1px solid $BORDER_STRONG;
-    border-radius: 6px;
-    padding: 6px 12px;
-    color: $TEXT_SECONDARY;
+    border-radius: 16px;
+    padding: 6px 14px;
+    color: $TEXT;
+    font-size: 13px;
     font-weight: 500;
 }
 QPushButton:hover {
@@ -337,17 +358,18 @@ QPushButton:focus {
 QPushButton:disabled {
     background-color: $SURFACE_MUTED;
     color: $TEXT_FAINT;
-    border-color: $DIVIDER;
+    border-color: $BORDER;
 }
 
+/* Filled button — the one loud action on a screen. */
 QPushButton#primaryButton {
     background-color: $ACCENT;
     border: 1px solid $ACCENT;
-    border-radius: 6px;
-    padding: 9px 22px;
+    border-radius: 20px;
+    padding: 10px 24px;
     color: $ACCENT_ON;
-    font-weight: 700;
-    font-size: 13px;
+    font-weight: 600;
+    font-size: 14px;
 }
 QPushButton#primaryButton:hover {
     background-color: $ACCENT_HOVER;
@@ -358,70 +380,85 @@ QPushButton#primaryButton:pressed {
     border-color: $ACCENT_PRESSED;
 }
 QPushButton#primaryButton:disabled {
-    background-color: $ACCENT_DISABLED;
-    border-color: $ACCENT_DISABLED;
-    color: $ACCENT_ON;
+    background-color: $SURFACE_MUTED;
+    border-color: $BORDER;
+    color: $TEXT_FAINT;
 }
 
+/* Outlined, destructive. */
 QPushButton#cancelButton {
-    background-color: $DANGER_SOFT;
+    background-color: transparent;
     border: 1px solid $DANGER_SOFT_BORDER;
-    border-radius: 6px;
-    padding: 9px 16px;
+    border-radius: 20px;
+    padding: 10px 18px;
     color: $DANGER;
     font-weight: 600;
+    font-size: 14px;
 }
 QPushButton#cancelButton:hover {
-    background-color: $DANGER;
+    background-color: $DANGER_SOFT;
     border-color: $DANGER;
-    color: $ACCENT_ON;
 }
 QPushButton#cancelButton:pressed {
-    background-color: $DANGER_SOFT_BORDER;
-    border-color: $DANGER_SOFT_BORDER;
+    background-color: $DANGER_SOFT;
+    border-color: $DANGER;
     color: $DANGER;
 }
 QPushButton#cancelButton:disabled {
-    background-color: $SURFACE_MUTED;
+    background-color: transparent;
     border-color: $DIVIDER;
     color: $TEXT_FAINT;
 }
 
+/* Tonal button — a quiet sibling of the filled one. */
 QPushButton#softButton {
-    background-color: $SURFACE_MUTED;
-    border: 1px solid $BORDER;
-    color: $TEXT_SECONDARY;
+    background-color: $ACCENT_SOFT;
+    border: 1px solid transparent;
+    border-radius: 20px;
+    padding: 9px 18px;
+    color: $ACCENT_SOFT_TEXT;
+    font-weight: 600;
 }
 QPushButton#softButton:hover {
-    background-color: $SURFACE_HOVER;
-    border-color: $BORDER_STRONG;
-    color: $TEXT_STRONG;
+    background-color: $ACCENT_SOFT_BORDER;
+    border-color: transparent;
+}
+QPushButton#softButton:disabled {
+    background-color: $SURFACE_MUTED;
+    color: $TEXT_FAINT;
 }
 
+/* Text button — no chrome until hovered. */
 QPushButton#ghostButton {
     background-color: transparent;
     border: 1px solid transparent;
-    color: $TEXT_MUTED;
-    padding: 5px 9px;
+    border-radius: 14px;
+    color: $TEXT_SECONDARY;
+    padding: 6px 10px;
+    font-size: 13px;
 }
 QPushButton#ghostButton:hover {
     background-color: $SURFACE_HOVER;
     color: $TEXT_STRONG;
 }
-
-/* Segmented control: lossless / lossy, quality presets, scale presets. */
-QPushButton#segmentButton {
+QPushButton#ghostButton:disabled {
+    color: $TEXT_FAINT;
     background-color: transparent;
-    border: 1px solid $BORDER;
-    border-radius: 6px;
-    padding: 5px 12px;
+}
+
+/* Filter chip — the Material way to offer a small set of choices. */
+QPushButton#segmentButton {
+    background-color: $SURFACE;
+    border: 1px solid $BORDER_STRONG;
+    border-radius: 16px;
+    padding: 6px 11px;
     color: $TEXT_SECONDARY;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 500;
 }
 QPushButton#segmentButton:hover {
     background-color: $SURFACE_HOVER;
-    border-color: $BORDER_STRONG;
+    border-color: $TEXT_FAINT;
     color: $TEXT_STRONG;
 }
 QPushButton#segmentButton:checked {
@@ -431,7 +468,7 @@ QPushButton#segmentButton:checked {
     font-weight: 600;
 }
 QPushButton#segmentButton:disabled {
-    background-color: $SURFACE_MUTED;
+    background-color: transparent;
     color: $TEXT_FAINT;
     border-color: $DIVIDER;
 }
@@ -439,9 +476,9 @@ QPushButton#segmentButton:disabled {
 /* ============================== inputs =========================== */
 QLineEdit, QComboBox, QSpinBox, QPlainTextEdit {
     background-color: $SURFACE_SUNK;
-    border: 1px solid $BORDER;
-    border-radius: 6px;
-    padding: 6px 9px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    padding: 7px 10px;
     color: $TEXT;
     selection-background-color: $ACCENT;
     selection-color: $ACCENT_ON;
@@ -456,7 +493,7 @@ QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QPlainTextEdit:focus {
 QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled, QPlainTextEdit:disabled {
     background-color: $SURFACE_MUTED;
     color: $TEXT_FAINT;
-    border-color: $DIVIDER;
+    border-color: transparent;
 }
 QLineEdit::placeholder {
     color: $TEXT_FAINT;
@@ -468,7 +505,7 @@ QLineEdit::placeholder {
    NoButtons, QStyleSheetStyle collapses its internal line edit to 1 px and the
    value disappears. QSS only controls the size, not the symbol setting. */
 QComboBox {
-    padding-right: 26px;
+    padding-right: 28px;
 }
 QComboBox::drop-down, QComboBox::down-arrow {
     width: 0;
@@ -478,7 +515,7 @@ QComboBox::drop-down, QComboBox::down-arrow {
     image: none;
 }
 QSpinBox {
-    padding: 6px 9px;
+    padding: 6px 10px;
 }
 QSpinBox::up-button, QSpinBox::down-button,
 QSpinBox::up-arrow, QSpinBox::down-arrow {
@@ -494,7 +531,7 @@ QSpinBox::up-arrow, QSpinBox::down-arrow {
 QSpinBox {
     background: transparent;
     border: 1px solid transparent;
-    border-radius: 6px;
+    border-radius: 8px;
 }
 QSpinBox:hover {
     background: transparent;
@@ -513,16 +550,16 @@ QSpinBox:disabled {
 QComboBox QAbstractItemView {
     background-color: $SURFACE;
     border: 1px solid $BORDER_STRONG;
-    border-radius: 6px;
+    border-radius: 8px;
     padding: 4px;
     outline: none;
     selection-background-color: $ACCENT_SOFT;
     selection-color: $ACCENT_SOFT_TEXT;
 }
 QComboBox QAbstractItemView::item {
-    min-height: 28px;
-    padding: 4px 9px;
-    border-radius: 4px;
+    min-height: 30px;
+    padding: 4px 10px;
+    border-radius: 6px;
     color: $TEXT_SECONDARY;
 }
 QComboBox QAbstractItemView::item:hover {
@@ -543,27 +580,30 @@ QTableView#queueTable::item {
     border: none;
     padding: 0;
 }
+/* The delegate paints its own selection highlight — a rounded tonal bar.
+   Qt's native selection fill would sit under it as a solid accent block,
+   so the item background stays transparent in every state. */
+QTableView#queueTable::item:selected,
+QTableView#queueTable::item:selected:hover,
+QTableView#queueTable::item:hover {
+    background: transparent;
+    border: none;
+}
 QHeaderView {
     background-color: transparent;
     border: none;
 }
 QHeaderView::section {
-    background-color: $SURFACE_SUNK;
-    color: $TEXT_MUTED;
+    background-color: transparent;
+    color: $TEXT_SECONDARY;
     border: none;
     border-bottom: 1px solid $BORDER;
-    padding: 5px 8px;
-    font-size: 11px;
-    font-weight: 600;
-}
-QHeaderView::section:first {
-    border-top-left-radius: 6px;
-}
-QHeaderView::section:last {
-    border-top-right-radius: 6px;
+    padding: 6px 8px;
+    font-size: 12px;
+    font-weight: 500;
 }
 QTableCornerButton::section {
-    background-color: $SURFACE_SUNK;
+    background-color: transparent;
     border: none;
     border-bottom: 1px solid $BORDER;
 }
@@ -576,68 +616,69 @@ QLabel {
 
 QLabel#fieldLabel {
     color: $TEXT_SECONDARY;
-    font-size: 12px;
+    font-size: 13px;
     font-weight: 500;
 }
 
 QLabel#microLabel {
     color: $TEXT_MUTED;
-    font-size: 10px;
-    font-weight: 700;
+    font-size: 12px;
+    font-weight: 500;
 }
 
 QLabel#mutedLabel {
     color: $TEXT_MUTED;
-    font-size: 11px;
+    font-size: 12px;
 }
 
 QLabel#monoValue {
     color: $TEXT_SECONDARY;
-    font-size: 12px;
+    font-size: 13px;
 }
 
 QLabel#statValue {
     color: $TEXT_STRONG;
-    font-size: 26px;
-    font-weight: 700;
+    font-size: 28px;
+    font-weight: 600;
 }
 
 QLabel#statCaption {
     color: $TEXT_MUTED;
-    font-size: 11px;
+    font-size: 12px;
 }
 
 QLabel#statusLabel {
     color: $TEXT_SECONDARY;
-    font-size: 12px;
+    font-size: 13px;
 }
 
 QLabel#valueBadge {
     background-color: $ACCENT_SOFT;
     border: 1px solid $ACCENT_SOFT_BORDER;
-    border-radius: 4px;
-    padding: 1px 7px;
+    border-radius: 10px;
+    padding: 2px 9px;
     color: $ACCENT_SOFT_TEXT;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
 }
 
 QLabel#idleBadge {
     background-color: $SURFACE_MUTED;
     border: 1px solid $BORDER;
-    border-radius: 4px;
-    padding: 1px 7px;
-    color: $TEXT_MUTED;
-    font-size: 11px;
+    border-radius: 10px;
+    padding: 2px 9px;
+    color: $TEXT_SECONDARY;
+    font-size: 12px;
 }
 
+/* Tonal status chip — colour carries the state, the shape stays quiet. */
 QLabel#stateBadge {
     background-color: $SURFACE_MUTED;
-    border: 1px solid $BORDER;
-    border-radius: 4px;
-    padding: 2px 8px;
-    color: $TEXT_MUTED;
-    font-size: 11px;
+    border: 1px solid transparent;
+    border-radius: 10px;
+    padding: 3px 10px;
+    color: $TEXT_SECONDARY;
+    font-size: 12px;
     font-weight: 600;
 }
 QLabel#stateBadge[state="running"] {
@@ -656,51 +697,51 @@ QLabel#stateBadge[state="done"] {
     color: $SUCCESS;
 }
 QLabel#stateBadge[state="cancelled"] {
-    background-color: $NEUTRAL_SOFT;
-    border-color: $BORDER_STRONG;
+    background-color: $SURFACE_MUTED;
+    border-color: $BORDER;
     color: $TEXT_SECONDARY;
 }
 
 QLabel#noteLabel {
     background-color: $WARNING_SOFT;
     border: 1px solid $WARNING;
-    border-radius: 6px;
-    padding: 6px 9px;
+    border-radius: 8px;
+    padding: 7px 10px;
     color: $WARNING;
-    font-size: 11px;
+    font-size: 12px;
 }
 
 QLabel#logTitle {
     color: $TEXT_STRONG;
-    font-size: 13px;
-    font-weight: 700;
+    font-size: 14px;
+    font-weight: 600;
 }
 
 /* ============================== drop zone ======================== */
 QFrame#dropZone {
     background-color: $SURFACE_SUNK;
     border: 1px dashed $BORDER_STRONG;
-    border-radius: 8px;
+    border-radius: 12px;
 }
 QFrame#dropZone[state="active"] {
     background-color: $ACCENT_SOFT;
     border: 1px dashed $ACCENT;
 }
 QLabel#dropZoneTitle {
-    color: $TEXT_SECONDARY;
-    font-size: 12px;
-    font-weight: 600;
+    color: $TEXT_STRONG;
+    font-size: 14px;
+    font-weight: 500;
 }
 QLabel#dropZoneHint {
     color: $TEXT_MUTED;
-    font-size: 11px;
+    font-size: 12px;
 }
 
 /* ============================== preview ========================== */
 QAbstractScrollArea#previewStage {
     background-color: $SURFACE_SUNK;
     border: 1px solid $BORDER;
-    border-radius: 8px;
+    border-radius: 12px;
 }
 QAbstractScrollArea#previewStage > QWidget > QWidget {
     background: transparent;
@@ -708,11 +749,11 @@ QAbstractScrollArea#previewStage > QWidget > QWidget {
 QFrame#previewStage {
     background-color: $SURFACE_SUNK;
     border: 1px solid $BORDER;
-    border-radius: 8px;
+    border-radius: 12px;
 }
 QLabel#previewCaption {
     color: $TEXT_MUTED;
-    font-size: 11px;
+    font-size: 12px;
 }
 
 /* ============================= splitters ========================= */
@@ -733,14 +774,14 @@ QSplitter::handle:pressed {
 /* ============================= progress ========================== */
 QProgressBar {
     background-color: $SURFACE_MUTED;
-    border: 1px solid $BORDER;
+    border: none;
     border-radius: 3px;
     min-height: 6px;
     max-height: 6px;
 }
 QProgressBar::chunk {
     background-color: $ACCENT;
-    border-radius: 2px;
+    border-radius: 3px;
 }
 QProgressBar[state="running"]::chunk {
     background-color: $ACCENT;
@@ -774,14 +815,17 @@ QSlider {
 QCheckBox {
     background: transparent;
     color: $TEXT_SECONDARY;
-    font-size: 12px;
-    spacing: 7px;
+    font-size: 13px;
+    spacing: 8px;
 }
+/* The indicator is drawn by CheckBox in widgets.py: a QSS-styled indicator
+   loses its tick, and an image resource would have to be bundled. The native
+   sub-control is kept at its natural size so the label still clears it. */
 QCheckBox::indicator {
-    width: 15px;
-    height: 15px;
+    width: 18px;
+    height: 18px;
     border: 1px solid $BORDER_STRONG;
-    border-radius: 3px;
+    border-radius: 4px;
     background-color: $SURFACE;
 }
 QCheckBox::indicator:hover {
@@ -801,12 +845,12 @@ QCheckBox::indicator:disabled {
 QListWidget {
     background-color: $SURFACE_SUNK;
     border: 1px solid $BORDER;
-    border-radius: 6px;
+    border-radius: 8px;
     padding: 5px;
     outline: none;
 }
 QListWidget::item {
-    padding: 6px 9px;
+    padding: 7px 10px;
     border-radius: 6px;
     color: $TEXT_SECONDARY;
 }
@@ -823,8 +867,8 @@ QListWidget::item:selected {
 QPlainTextEdit#logView {
     background-color: $SURFACE_SUNK;
     border: 1px solid $BORDER;
-    border-radius: 6px;
-    padding: 8px 10px;
+    border-radius: 8px;
+    padding: 9px 11px;
     color: $TEXT_SECONDARY;
     font-size: 12px;
 }
@@ -832,26 +876,26 @@ QPlainTextEdit#logView {
 /* ============================= scrollbars ======================== */
 QScrollBar:vertical {
     background: transparent;
-    width: 9px;
+    width: 10px;
     margin: 2px 0;
 }
 QScrollBar::handle:vertical {
     background: $BORDER_STRONG;
     min-height: 32px;
-    border-radius: 4px;
+    border-radius: 5px;
 }
 QScrollBar::handle:vertical:hover {
     background: $TEXT_FAINT;
 }
 QScrollBar:horizontal {
     background: transparent;
-    height: 9px;
+    height: 10px;
     margin: 0 2px;
 }
 QScrollBar::handle:horizontal {
     background: $BORDER_STRONG;
     min-width: 32px;
-    border-radius: 4px;
+    border-radius: 5px;
 }
 QScrollBar::handle:horizontal:hover {
     background: $TEXT_FAINT;
@@ -873,28 +917,28 @@ QFrame#statusBar {
 }
 QLabel#statusBarText {
     color: $TEXT_MUTED;
-    font-size: 11px;
+    font-size: 12px;
 }
 QLabel#statusBarValue {
     color: $TEXT_SECONDARY;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 600;
 }
 QLabel#statusBarAccent {
     color: $ACCENT_SOFT_TEXT;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
 }
 
 /* ============================ toast ============================== */
 QFrame#toast {
-    background-color: $TEXT_STRONG;
-    border: 1px solid $BORDER_STRONG;
-    border-radius: 7px;
+    background-color: $SNACKBAR_BG;
+    border: none;
+    border-radius: 8px;
 }
 QLabel#toastText {
-    color: $SURFACE;
-    font-size: 12px;
+    color: $SNACKBAR_TEXT;
+    font-size: 13px;
 }
 """
 )
@@ -998,7 +1042,7 @@ def build_palette(mode: str = "light"):
     palette.setColor(QPalette.ColorRole.AlternateBase, QColor(tokens["SURFACE_MUTED"]))
     palette.setColor(QPalette.ColorRole.Text, QColor(tokens["TEXT"]))
     palette.setColor(QPalette.ColorRole.Button, QColor(tokens["SURFACE"]))
-    palette.setColor(QPalette.ColorRole.ButtonText, QColor(tokens["TEXT_SECONDARY"]))
+    palette.setColor(QPalette.ColorRole.ButtonText, QColor(tokens["TEXT"]))
     palette.setColor(QPalette.ColorRole.BrightText, QColor(tokens["ACCENT_ON"]))
     palette.setColor(QPalette.ColorRole.Highlight, QColor(tokens["ACCENT"]))
     palette.setColor(QPalette.ColorRole.HighlightedText, QColor(tokens["ACCENT_ON"]))

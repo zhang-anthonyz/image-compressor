@@ -9,9 +9,7 @@ Run:  python scripts/fetch_fonts.py
 """
 from __future__ import annotations
 
-import json
 import os
-import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -25,14 +23,15 @@ HEADERS = {"User-Agent": "curl/8"}
 
 #: (raw path under google/fonts@main, local file name)
 ASSETS: tuple[tuple[str, str], ...] = (
-    # Archivo ships as a variable font upstream; Qt 6.12 enumerates its nine
-    # named instances, so one 643 KB file covers Regular → Black.
-    ("ofl/archivo/Archivo%5Bwdth%2Cwght%5D.ttf", "Archivo-Variable.ttf"),
-    ("ofl/ibmplexmono/IBMPlexMono-Regular.ttf", "IBMPlexMono-Regular.ttf"),
-    ("ofl/ibmplexmono/IBMPlexMono-Medium.ttf", "IBMPlexMono-Medium.ttf"),
-    ("ofl/ibmplexmono/IBMPlexMono-SemiBold.ttf", "IBMPlexMono-SemiBold.ttf"),
-    ("ofl/archivo/OFL.txt", "LICENSE-Archivo.txt"),
-    ("ofl/ibmplexmono/OFL.txt", "LICENSE-IBMPlexMono.txt"),
+    # The Google-adjacent identity: DM Sans is the closest open relative of
+    # Google Sans / Product Sans (geometric, single-story g), and Roboto Mono
+    # is Google's own UI mono. Both ship as variable fonts upstream; Qt
+    # enumerates their named instances, so one file per family covers
+    # Regular → Bold plus the Medium/SemiBold steps the UI uses.
+    ("ofl/dmsans/DMSans%5Bopsz%2Cwght%5D.ttf", "DMSans-Variable.ttf"),
+    ("ofl/robotomono/RobotoMono%5Bwght%5D.ttf", "RobotoMono-Variable.ttf"),
+    ("ofl/dmsans/OFL.txt", "LICENSE-DMSans.txt"),
+    ("ofl/robotomono/OFL.txt", "LICENSE-RobotoMono.txt"),
 )
 
 

@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, QRectF, Qt
-from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPen
+from PySide6.QtGui import QColor, QFont, QFontMetrics, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QStyle, QStyledItemDelegate, QStyleOptionViewItem
 
 from ..core import pipeline
@@ -28,14 +28,16 @@ COL_SAVINGS = 5
 
 HEADERS = ("", "文件名", "尺寸", "原始", "压缩后", "节省")
 
-#: Status -> (label, token name for the pill colour)
+#: Status -> (label, foreground token, tonal background token).
+#: Material expresses state as a tonal chip: a filled low-contrast surface with
+#: the matching on-container text, never a saturated colour on white.
 STATUS_META = {
-    pipeline.STATUS_PENDING: ("待处理", "TEXT_MUTED"),
-    pipeline.STATUS_RUNNING: ("处理中", "ACCENT"),
-    pipeline.STATUS_DONE: ("完成", "SUCCESS"),
-    pipeline.STATUS_UNCHANGED: ("已优化", "WARNING"),
-    pipeline.STATUS_SKIPPED: ("已跳过", "NEUTRAL"),
-    pipeline.STATUS_FAILED: ("失败", "DANGER"),
+    pipeline.STATUS_PENDING: ("待处理", "TEXT_SECONDARY", "SURFACE_MUTED"),
+    pipeline.STATUS_RUNNING: ("处理中", "ACCENT_SOFT_TEXT", "ACCENT_SOFT"),
+    pipeline.STATUS_DONE: ("完成", "SUCCESS", "SUCCESS_SOFT"),
+    pipeline.STATUS_UNCHANGED: ("已优化", "WARNING", "WARNING_SOFT"),
+    pipeline.STATUS_SKIPPED: ("已跳过", "TEXT_SECONDARY", "SURFACE_MUTED"),
+    pipeline.STATUS_FAILED: ("失败", "DANGER", "DANGER_SOFT"),
 }
 
 
@@ -185,6 +187,10 @@ class QueueModel(QAbstractTableModel):
             if column == COL_NAME:
                 return color_for("TEXT_STRONG" if item.enabled else "TEXT_FAINT")
             return color_for("TEXT_SECONDARY")
+
+        if role == Qt.ItemDataRole.FontRole and column == COL_NAME:
+            # The file name is the row's headline: medium weight, not bold.
+            return fonts.make_font(size=10, weight=fonts.WEIGHT_MEDIUM)
 
         return None
 
@@ -345,17 +351,27 @@ class QueueDelegate(QStyledItemDelegate):
         rect = QRectF(option.rect).adjusted(0.5, 0.5, -0.5, -0.5)
         row_rect = QRectF(option.rect)
 
-        # --- row background: selection beats hover beats nothing. A plain rect
-        # per cell (rather than a rounded rect with margins) joins across column
-        # boundaries into one continuous row highlight.
-        if option.state & QStyle.StateFlag.State_Selected:
-            painter.setBrush(color_for("ACCENT_SOFT"))
+        # --- row background: selection beats hover beats nothing. The
+        # highlight is painted per cell, so the first and last cell draw
+        # rounded outer corners and the cells between them stay square —
+        # together they read as one continuous rounded row.
+        selected = bool(option.state & QStyle.StateFlag.State_Selected)
+        hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
+        if selected or hovered:
+            painter.setBrush(color_for("ACCENT_SOFT" if selected else "SURFACE_HOVER"))
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawRect(row_rect.adjusted(0, 1, 0, -1))
-        elif option.state & QStyle.StateFlag.State_MouseOver:
-            painter.setBrush(color_for("SURFACE_HOVER"))
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.drawRect(row_rect.adjusted(0, 1, 0, -1))
+            # One rounded bar for the whole row. The delegate is called once
+            # per cell, so each cell draws its own slice of a single row-wide
+            # rounded rect: the clip stays on the *cell* (clipping to the row
+            # would let every cell repaint the whole bar and bury the cells
+            # painted before it), while the shape spans the row so the outer
+            # ends come out rounded.
+            left, right = self._row_span(option)
+            bar = QRectF(left, row_rect.top() + 3, right - left, row_rect.height() - 7)
+            painter.save()
+            painter.setClipRect(row_rect)
+            painter.drawRoundedRect(bar, 8, 8)
+            painter.restore()
 
         painter.setPen(QPen(color_for("DIVIDER"), 1))
         painter.drawLine(
@@ -378,6 +394,26 @@ class QueueDelegate(QStyledItemDelegate):
         painter.restore()
 
     # ------------------------------------------------------------- primitives
+    @staticmethod
+    def _row_span(option) -> tuple[float, float]:
+        """Left and right edge of the row's content, in viewport coordinates.
+
+        The selection bar spans the table's columns, not the viewport: when
+        the queue scrolls sideways the highlight has to travel with the rows
+        instead of staying pinned to the window.
+        """
+        view = option.widget
+        if view is None:
+            return 0.0, float(option.rect.width())
+        header = view.horizontalHeader()
+        count = header.count()
+        if count == 0:
+            return 0.0, float(view.viewport().width())
+        left = float(header.sectionViewportPosition(0))
+        last = header.sectionViewportPosition(count - 1)
+        right = float(last + header.sectionSize(count - 1))
+        return left, right
+
     def _paint_text(self, painter, rect, index, item) -> None:
         column = index.column()
         text = index.data(Qt.ItemDataRole.DisplayRole) or ""
@@ -449,7 +485,7 @@ class QueueDelegate(QStyledItemDelegate):
         painter.setFont(font)
         metrics = QFontMetrics(font)
         text_width = metrics.horizontalAdvance(text)
-        pad = 8.0
+        pad = 10.0
         text_rect = QRectF(
             rect.right() - pad - text_width,
             rect.top(),
@@ -458,20 +494,20 @@ class QueueDelegate(QStyledItemDelegate):
         )
 
         bar_left = rect.left() + pad
-        bar_right = text_rect.left() - 7
+        bar_right = text_rect.left() - 8
         bar_width = bar_right - bar_left
         if bar_width >= 28:
-            bar_height = 7.0
-            bar_top = rect.center().y() - bar_height / 2 + 1
+            bar_height = 6.0
+            bar_top = rect.center().y() - bar_height / 2
 
             painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(color_for("SURFACE_PRESSED"))
-            painter.drawRoundedRect(QRectF(bar_left, bar_top, bar_width, bar_height), 3.5, 3.5)
+            painter.setBrush(color_for("SURFACE_MUTED"))
+            painter.drawRoundedRect(QRectF(bar_left, bar_top, bar_width, bar_height), 3, 3)
 
             if ratio > 0:
                 filled = max(bar_height, bar_width * ratio)
                 painter.setBrush(color_for("ACCENT"))
-                painter.drawRoundedRect(QRectF(bar_left, bar_top, filled, bar_height), 3.5, 3.5)
+                painter.drawRoundedRect(QRectF(bar_left, bar_top, filled, bar_height), 3, 3)
 
         painter.setPen(color_for("TEXT_STRONG" if ratio > 0.05 else "TEXT_MUTED"))
         painter.drawText(
@@ -481,20 +517,20 @@ class QueueDelegate(QStyledItemDelegate):
         )
 
     def _paint_status_pill(self, painter, rect, item) -> None:
-        label, token_name = STATUS_META.get(item.status, (item.status, "TEXT_MUTED"))
-        color = color_for(token_name)
-        font = fonts.make_font(size=8, weight=fonts.WEIGHT_SEMIBOLD, tracking=0.3)
+        label, fg_token, bg_token = STATUS_META.get(
+            item.status, (item.status, "TEXT_SECONDARY", "SURFACE_MUTED")
+        )
+        color = color_for(fg_token)
+        font = fonts.make_font(size=8, weight=fonts.WEIGHT_SEMIBOLD)
         painter.setFont(font)
         metrics = QFontMetrics(font)
-        width = min(rect.width() - 16, metrics.horizontalAdvance(label) + 16)
-        height = 19.0
+        width = min(rect.width() - 16, metrics.horizontalAdvance(label) + 18)
+        height = 20.0
         pill = QRectF(rect.right() - width - 8, rect.center().y() - height / 2, width, height)
 
-        background = QColor(color)
-        background.setAlpha(38)
-        painter.setBrush(background)
-        painter.setPen(QPen(color, 1))
-        painter.drawRoundedRect(pill, 4, 4)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(color_for(bg_token))
+        painter.drawRoundedRect(pill, height / 2, height / 2)
         painter.setPen(color)
         painter.drawText(pill, int(Qt.AlignmentFlag.AlignCenter), label)
 
@@ -503,5 +539,5 @@ class QueueDelegate(QStyledItemDelegate):
 
     def sizeHint(self, option, index):  # noqa: N802
         hint = super().sizeHint(option, index)
-        hint.setHeight(38)
+        hint.setHeight(40)
         return hint
